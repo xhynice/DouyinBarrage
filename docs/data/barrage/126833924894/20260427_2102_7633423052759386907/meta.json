@@ -1,0 +1,149 @@
+{
+  "session_id": "20260427_2102_7633423052759386907",
+  "live_id": "126833924894",
+  "available_types": [
+    "chat",
+    "control",
+    "gift",
+    "like",
+    "social",
+    "stats"
+  ],
+  "stats": {
+    "chat": 8628,
+    "control": 1,
+    "gift": 9615,
+    "like": 4369,
+    "social": 770,
+    "stats": 2446
+  },
+  "total": 25829,
+  "rankings": {
+    "chat": {
+      "top_users": [
+        {
+          "name": "抖音小肋手",
+          "count": 162
+        },
+        {
+          "name": "七岁就很萌",
+          "count": 86
+        },
+        {
+          "name": "小满",
+          "count": 50
+        },
+        {
+          "name": "太阳☀",
+          "count": 46
+        },
+        {
+          "name": "@L_Y@⁵¹⁰⁷⁴₈₀₀₈",
+          "count": 44
+        },
+        {
+          "name": "洛皮皮🐻‍❄️⁰⁵⁰³",
+          "count": 41
+        }
+      ],
+      "top_at": [
+        {
+          "name": "深情不及久伴",
+          "count": 30
+        },
+        {
+          "name": "知遇👣",
+          "count": 22
+        },
+        {
+          "name": "抖音小肋手",
+          "count": 20
+        },
+        {
+          "name": "时宜",
+          "count": 14
+        },
+        {
+          "name": "久久💞ــــﮩﮩ٨",
+          "count": 12
+        },
+        {
+          "name": "洋  仔⁸⁰⁰⁸",
+          "count": 11
+        }
+      ]
+    },
+    "gift": {
+      "top_users": [
+        {
+          "name": "颖",
+          "diamond": 4079,
+          "max_gift": "私人飞机",
+          "max_gift_diamond": 3000
+        },
+        {
+          "name": "奋斗滴青春",
+          "diamond": 2888,
+          "max_gift": "天使之翼",
+          "max_gift_diamond": 2888
+        },
+        {
+          "name": "@L_Y@⁵¹⁰⁷⁴₈₀₀₈",
+          "diamond": 2278,
+          "max_gift": "为你加冕",
+          "max_gift_diamond": 1000
+        },
+        {
+          "name": "AD沸羊羊（刷脂版）",
+          "diamond": 2240,
+          "max_gift": "跑车",
+          "max_gift_diamond": 1200
+        },
+        {
+          "name": "若鱼",
+          "diamond": 1541,
+          "max_gift": "为你加冕",
+          "max_gift_diamond": 1000
+        },
+        {
+          "name": "汪汪小汪",
+          "diamond": 1513,
+          "max_gift": "为你加冕",
+          "max_gift_diamond": 1000
+        }
+      ],
+      "total_diamond": 50766
+    },
+    "like": {
+      "top_users": [
+        {
+          "name": "懒得起名字",
+          "count": 2385
+        },
+        {
+          "name": "抖音小肋手",
+          "count": 2261
+        },
+        {
+          "name": "H",
+          "count": 2249
+        },
+        {
+          "name": "雨生",
+          "count": 2016
+        },
+        {
+          "name": "苦菊",
+          "count": 1833
+        },
+        {
+          "name": "0939",
+          "count": 1575
+        }
+      ],
+      "total_likes": 92416
+    }
+  },
+  "gift_diamond": 50766,
+  "total_pv": 268000
+}

@@ -1,0 +1,149 @@
+{
+  "session_id": "20260425_1203_7632542039841835803",
+  "live_id": "126833924894",
+  "available_types": [
+    "chat",
+    "control",
+    "gift",
+    "like",
+    "social",
+    "stats"
+  ],
+  "stats": {
+    "chat": 6491,
+    "control": 1,
+    "gift": 7326,
+    "like": 4606,
+    "social": 460,
+    "stats": 2401
+  },
+  "total": 21285,
+  "rankings": {
+    "chat": {
+      "top_users": [
+        {
+          "name": "🕊·R·₂·R·🕊ོ",
+          "count": 75
+        },
+        {
+          "name": "忙里偷闲⁵¹⁰⁷⁴",
+          "count": 69
+        },
+        {
+          "name": "贝塔β",
+          "count": 60
+        },
+        {
+          "name": "抖音小肋手",
+          "count": 59
+        },
+        {
+          "name": "酃",
+          "count": 51
+        },
+        {
+          "name": "楠De小雨天气💦",
+          "count": 46
+        }
+      ],
+      "top_at": [
+        {
+          "name": "野生小厨",
+          "count": 31
+        },
+        {
+          "name": "ら孤痞",
+          "count": 30
+        },
+        {
+          "name": "九月是只喵",
+          "count": 29
+        },
+        {
+          "name": "TeFuir",
+          "count": 15
+        },
+        {
+          "name": "知遇👣",
+          "count": 14
+        },
+        {
+          "name": "拜君仙⁹⁰⁹²⁷",
+          "count": 12
+        }
+      ]
+    },
+    "gift": {
+      "top_users": [
+        {
+          "name": "萌妹吖",
+          "diamond": 11715,
+          "max_gift": "抖音1号",
+          "max_gift_diamond": 10001
+        },
+        {
+          "name": "慕白白",
+          "diamond": 10001,
+          "max_gift": "抖音1号",
+          "max_gift_diamond": 10001
+        },
+        {
+          "name": "张君雅的啤酒瓶",
+          "diamond": 4995,
+          "max_gift": "跑车",
+          "max_gift_diamond": 1200
+        },
+        {
+          "name": "被伤透的心",
+          "diamond": 2097,
+          "max_gift": "跑车",
+          "max_gift_diamond": 1200
+        },
+        {
+          "name": "Mr、king",
+          "diamond": 2042,
+          "max_gift": "爱的华尔兹",
+          "max_gift_diamond": 1999
+        },
+        {
+          "name": "ㅤ ㅤㅤㅤ ㅤ",
+          "diamond": 2000,
+          "max_gift": "定海神针",
+          "max_gift_diamond": 1999
+        }
+      ],
+      "total_diamond": 62721
+    },
+    "like": {
+      "top_users": [
+        {
+          "name": "张君雅的啤酒瓶",
+          "count": 2232
+        },
+        {
+          "name": "@L_Y@⁵¹⁰⁷⁴₈₀₀₈",
+          "count": 2205
+        },
+        {
+          "name": "晞和",
+          "count": 1834
+        },
+        {
+          "name": "用户333976",
+          "count": 1518
+        },
+        {
+          "name": "kiss kiss",
+          "count": 1464
+        },
+        {
+          "name": "下次见面会有花吗",
+          "count": 1443
+        }
+      ],
+      "total_likes": 93775
+    }
+  },
+  "gift_diamond": 62721,
+  "total_pv": 327000
+}

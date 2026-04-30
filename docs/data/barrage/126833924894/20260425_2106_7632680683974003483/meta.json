@@ -1,0 +1,149 @@
+{
+  "session_id": "20260425_2106_7632680683974003483",
+  "live_id": "126833924894",
+  "available_types": [
+    "chat",
+    "control",
+    "gift",
+    "like",
+    "social",
+    "stats"
+  ],
+  "stats": {
+    "chat": 7536,
+    "control": 1,
+    "gift": 7077,
+    "like": 4063,
+    "social": 605,
+    "stats": 2745
+  },
+  "total": 22027,
+  "rankings": {
+    "chat": {
+      "top_users": [
+        {
+          "name": "抖音小肋手",
+          "count": 97
+        },
+        {
+          "name": "@L_Y@⁵¹⁰⁷⁴₈₀₀₈",
+          "count": 73
+        },
+        {
+          "name": "酃",
+          "count": 66
+        },
+        {
+          "name": "安悠尘my🦌",
+          "count": 56
+        },
+        {
+          "name": "🌾🌾🌾炒菜不用郭先生🍎🍊🍉🍌",
+          "count": 49
+        },
+        {
+          "name": "吃串串的喵",
+          "count": 47
+        }
+      ],
+      "top_at": [
+        {
+          "name": "久久💞ــــﮩﮩ٨",
+          "count": 29
+        },
+        {
+          "name": "ら孤痞",
+          "count": 21
+        },
+        {
+          "name": "深情不及久伴",
+          "count": 20
+        },
+        {
+          "name": "野生小厨",
+          "count": 19
+        },
+        {
+          "name": "安悠尘my🦌",
+          "count": 18
+        },
+        {
+          "name": "小伙很有脾气",
+          "count": 13
+        }
+      ]
+    },
+    "gift": {
+      "top_users": [
+        {
+          "name": "久久💞ــــﮩﮩ٨",
+          "diamond": 4915,
+          "max_gift": "头号玩家",
+          "max_gift_diamond": 3500
+        },
+        {
+          "name": "甜甜不吃甜",
+          "diamond": 2643,
+          "max_gift": "跑车",
+          "max_gift_diamond": 1200
+        },
+        {
+          "name": "亦初༠⁰²¹⁰",
+          "diamond": 1726,
+          "max_gift": "真的爱你",
+          "max_gift_diamond": 520
+        },
+        {
+          "name": "朱七七仙女的一家",
+          "diamond": 1227,
+          "max_gift": "为你闪耀",
+          "max_gift_diamond": 144
+        },
+        {
+          "name": "A1.",
+          "diamond": 1201,
+          "max_gift": "跑车",
+          "max_gift_diamond": 1200
+        },
+        {
+          "name": "宁财神",
+          "diamond": 1200,
+          "max_gift": "跑车",
+          "max_gift_diamond": 1200
+        }
+      ],
+      "total_diamond": 39052
+    },
+    "like": {
+      "top_users": [
+        {
+          "name": "苦菊",
+          "count": 4381
+        },
+        {
+          "name": "堇年",
+          "count": 2701
+        },
+        {
+          "name": "天空无云",
+          "count": 2076
+        },
+        {
+          "name": "H",
+          "count": 1941
+        },
+        {
+          "name": "抖音小肋手",
+          "count": 1806
+        },
+        {
+          "name": "用星渲染夜给得伤",
+          "count": 1572
+        }
+      ],
+      "total_likes": 88278
+    }
+  },
+  "gift_diamond": 39052,
+  "total_pv": 274000
+}
