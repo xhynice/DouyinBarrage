@@ -2,8 +2,8 @@ name: Barrage
 
 on:
   schedule:
-    - cron: '50 3 * * *'   # 北京时间 11:50 (UTC+8)
-    - cron: '55 12 * * *'  # 北京时间 20:55 (UTC+8)
+    - cron: '50 3 * * 0-1,3-6'   # 北京时间 11:50 (排除星期二)
+    - cron: '55 12 * * 0-1,3-6'  # 北京时间 20:55 (排除星期二)
   workflow_dispatch:
     inputs:
       live_id:
