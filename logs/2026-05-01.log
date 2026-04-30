@@ -1,0 +1,20 @@
+[05-01 01:27] [INFO] [启动] 已加载 Cookie（52 项），包含 sessionid，待连接后验证登录态
+[05-01 01:27] [INFO] [启动] live_id: 126833924894
+[05-01 01:27] [INFO] [启动] UA: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36
+[05-01 01:27] [INFO] [启动] user_unique_id: 8785545831015037886
+[05-01 01:27] [INFO] [启动] 网络配置: http_timeout=15s, ws_connect_timeout=30s, silence_timeout=60s, heartbeat_interval=10s, rcvbuf=256KB
+[05-01 01:27] [INFO] [连接] 第 1 次连接
+[05-01 01:27] [DEBUG] [房间] ttwid 自动获取成功: 1%7Cc9DykmnT6gT45nv14QpGqVivrjbLqtgNTkbewXz519I%7C...
+[05-01 01:27] [INFO] [房间] 已登录「万年」
+[05-01 01:27] [INFO] [房间] Cookie 有效期至 2026-06-11
+[05-01 01:27] [DEBUG] [房间] ttwid: 1%7Cc9DykmnT6gT45nv14QpGqVivrjbLqtgNTkbewXz519I%7C...
+[05-01 01:27] [DEBUG] [网络] API 响应状态码: 200, Content-Type: application/json; charset=utf-8
+[05-01 01:27] [DEBUG] [网络] API 响应内容长度: 734472
+[05-01 01:27] [DEBUG] [网络] API 响应内容前 500 字符: {"data":{"data":[{"id_str":"7634536132025305902","status":4,"status_str":"4","title":"最精彩的战神局钢枪直播间","user_count_str":"0","mosaic_status":0,"mosaic_status_str":"","admin_user_ids":[],"admin_user_ids_str":[],"live_room_mode":1,"has_commerce_goods":false,"linker_map":{},"AnchorABMap":{},"like_count":0,"owner_user_id_str":"","gift_msg_style":0,"fansclub_msg_style":0,"follow_msg_style":0,"share_msg_style":0,"admin_user_open_ids":[],"admin_user_open_ids_str":[],"owner_open_id_str":""}],"enter_room_id"
+[05-01 01:27] [DEBUG] [网络] API 返回 JSON 结构: status_code=0, data.data length=1
+[05-01 01:27] [INFO] [控制] 张君雅1v4⁸⁰⁰⁸ 监测中（间隔 120s）
+[05-01 01:27] [DEBUG] [房间] ttwid: 1%7Cc9DykmnT6gT45nv14QpGqVivrjbLqtgNTkbewXz519I%7C...
+[05-01 01:27] [DEBUG] [网络] API 响应状态码: 200, Content-Type: application/json; charset=utf-8
+[05-01 01:27] [DEBUG] [网络] API 响应内容长度: 733905
+[05-01 01:27] [DEBUG] [网络] API 响应内容前 500 字符: {"data":{"data":[{"id_str":"7634536132025305902","status":4,"status_str":"4","title":"最精彩的战神局钢枪直播间","user_count_str":"0","mosaic_status":0,"mosaic_status_str":"","admin_user_ids":[],"admin_user_ids_str":[],"live_room_mode":1,"has_commerce_goods":false,"linker_map":{},"AnchorABMap":{},"like_count":0,"owner_user_id_str":"","gift_msg_style":0,"fansclub_msg_style":0,"follow_msg_style":0,"share_msg_style":0,"admin_user_open_ids":[],"admin_user_open_ids_str":[],"owner_open_id_str":""}],"enter_room_id"
+[05-01 01:27] [DEBUG] [网络] API 返回 JSON 结构: status_code=0, data.data length=1
