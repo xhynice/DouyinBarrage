@@ -171,6 +171,9 @@ const BarrageApp = (function() {
         const avatarEl = document.getElementById('header-avatar');
         avatarEl.src = avatarSrc;
         avatarEl.onerror = () => { avatarEl.src = AVATAR_PLACEHOLDER; };
+        const fav = document.getElementById('favicon');
+        fav.href = avatarSrc;
+        fav.type = 'image/jpeg';
     }
 
     function getTypeConfig(type) {

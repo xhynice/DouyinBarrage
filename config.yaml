@@ -11,14 +11,14 @@ rooms:
     enabled: true
 
 # ==================== 日志配置 ====================
-log_level: DEBUG                  # 日志级别: DEBUG / INFO / WARNING / ERROR / NONE（NONE=关闭日志，数据文件照常写入）
+log_level: WARNING                  # 日志级别: DEBUG / INFO / WARNING / ERROR / NONE（NONE=关闭日志，数据文件照常写入）
 
 # ==================== Cookie 配置 ====================
 cookie_file: cookie.txt          # Cookie 文件路径（相对于脚本目录），不存在则以游客身份采集
 
 # ==================== 等待开播配置 ====================
 live_stop: true                  # 直播结束后是否停止退出: true=结束退出 / false=等待重开播
-live_check_interval: 120         # 未开播时 HTTP 轮询间隔（秒）
+live_check_interval: 160         # 未开播时 HTTP 轮询间隔（秒）
 
 # ==================== 输出配置 ====================
 output:

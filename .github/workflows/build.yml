@@ -1,0 +1,93 @@
+name: Barrage
+
+on:
+  schedule:
+    - cron: '50 3 * * *'   # 北京时间 11:50 (UTC+8)
+    - cron: '55 12 * * *'  # 北京时间 20:55 (UTC+8)
+  workflow_dispatch:
+    inputs:
+      live_id:
+        description: '直播间ID (留空则使用config.yaml第一个)'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: true
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.x"
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Create cookie file from secret
+      run: |
+        if [ -n "${{ secrets.COOKIE_TXT }}" ]; then
+          echo "${{ secrets.COOKIE_TXT }}" | base64 -d > cookie.txt
+          echo "已创建 cookie.txt"
+        else
+          echo "未配置 COOKIE_TXT secret，将以游客身份采集"
+        fi
+    
+    - name: Get first live_id from config
+      id: get-live-id
+      run: |
+        python -c "
+        import yaml
+        with open('config.yaml', 'r', encoding='utf-8') as f:
+            cfg = yaml.safe_load(f)
+        rooms = cfg.get('rooms', [])
+        if rooms:
+            print('live_id=' + rooms[0]['id'])
+        else:
+            print('live_id=')
+        " >> $GITHUB_OUTPUT
+    
+    - name: Run barrage collector
+      run: |
+        live_id="${{ github.event.inputs.live_id || steps.get-live-id.outputs.live_id }}"
+        if [ -n "$live_id" ]; then
+          echo "采集直播间: $live_id"
+          python main.py "$live_id" --live-stop
+        else
+          echo "未找到直播间ID，跳过采集"
+        fi
+      continue-on-error: true
+    
+    - name: Build site data
+      run: python scripts/build_barrage.py
+    
+    - name: Upload data artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: barrage-data-${{ github.run_number }}
+        path: |
+          data/
+          logs/
+        retention-days: 3
+    
+    - name: Commit data to repo
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add -f data/ docs/data/ logs/ 2>/dev/null || true
+        git diff --quiet && git diff --staged --quiet || git commit -m "Update barrage data: $(date '+%Y-%m-%d %H:%M')"
+        git push || echo "No changes to commit"
+      continue-on-error: true

@@ -18,3 +18,25 @@
 [05-01 01:27] [DEBUG] [网络] API 响应内容长度: 733905
 [05-01 01:27] [DEBUG] [网络] API 响应内容前 500 字符: {"data":{"data":[{"id_str":"7634536132025305902","status":4,"status_str":"4","title":"最精彩的战神局钢枪直播间","user_count_str":"0","mosaic_status":0,"mosaic_status_str":"","admin_user_ids":[],"admin_user_ids_str":[],"live_room_mode":1,"has_commerce_goods":false,"linker_map":{},"AnchorABMap":{},"like_count":0,"owner_user_id_str":"","gift_msg_style":0,"fansclub_msg_style":0,"follow_msg_style":0,"share_msg_style":0,"admin_user_open_ids":[],"admin_user_open_ids_str":[],"owner_open_id_str":""}],"enter_room_id"
 [05-01 01:27] [DEBUG] [网络] API 返回 JSON 结构: status_code=0, data.data length=1
+[05-01 02:07] [INFO] [启动] 未加载 cookie.txt，以游客身份采集（礼物等信息可能受限）
+[05-01 02:07] [INFO] [启动] live_id: 126833924894
+[05-01 02:07] [INFO] [启动] UA: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36
+[05-01 02:07] [INFO] [启动] user_unique_id: 7144365195325697470
+[05-01 02:07] [INFO] [启动] 网络配置: http_timeout=15s, ws_connect_timeout=30s, silence_timeout=60s, heartbeat_interval=10s, rcvbuf=256KB
+[05-01 02:07] [INFO] [连接] 第 1 次连接
+[05-01 02:07] [DEBUG] [房间] ttwid 自动获取成功: 1%7CxG-9rWvZnGvGJFfJ4zw3Np_oZh-bw2j2-4jJFdXU68M%7C...
+[05-01 02:07] [INFO] [房间] 无登录凭证，以游客模式采集（礼物等信息可能受限）
+[05-01 02:07] [DEBUG] [房间] ttwid: 1%7CxG-9rWvZnGvGJFfJ4zw3Np_oZh-bw2j2-4jJFdXU68M%7C...
+[05-01 02:07] [DEBUG] [网络] API 响应状态码: 200, Content-Type: application/json; charset=utf-8
+[05-01 02:07] [DEBUG] [网络] API 响应内容长度: 700356
+[05-01 02:07] [DEBUG] [网络] API 响应内容前 500 字符: {"data":{"data":[{"id_str":"7634536132025305902","status":4,"status_str":"4","title":"最精彩的战神局钢枪直播间","user_count_str":"0","mosaic_status":0,"mosaic_status_str":"","admin_user_ids":[],"admin_user_ids_str":[],"live_room_mode":1,"has_commerce_goods":false,"linker_map":{},"AnchorABMap":{},"like_count":0,"owner_user_id_str":"","gift_msg_style":0,"fansclub_msg_style":0,"follow_msg_style":0,"share_msg_style":0,"admin_user_open_ids":[],"admin_user_open_ids_str":[],"owner_open_id_str":""}],"enter_room_id"
+[05-01 02:07] [DEBUG] [网络] API 返回 JSON 结构: status_code=0, data.data length=1
+[05-01 02:07] [INFO] [控制] 张君雅1v4⁸⁰⁰⁸ 监测中（间隔 120s）
+[05-01 02:07] [DEBUG] [房间] ttwid: 1%7CxG-9rWvZnGvGJFfJ4zw3Np_oZh-bw2j2-4jJFdXU68M%7C...
+[05-01 02:07] [DEBUG] [网络] API 响应状态码: 200, Content-Type: application/json; charset=utf-8
+[05-01 02:07] [DEBUG] [网络] API 响应内容长度: 700356
+[05-01 02:07] [DEBUG] [网络] API 响应内容前 500 字符: {"data":{"data":[{"id_str":"7634536132025305902","status":4,"status_str":"4","title":"最精彩的战神局钢枪直播间","user_count_str":"0","mosaic_status":0,"mosaic_status_str":"","admin_user_ids":[],"admin_user_ids_str":[],"live_room_mode":1,"has_commerce_goods":false,"linker_map":{},"AnchorABMap":{},"like_count":0,"owner_user_id_str":"","gift_msg_style":0,"fansclub_msg_style":0,"follow_msg_style":0,"share_msg_style":0,"admin_user_open_ids":[],"admin_user_open_ids_str":[],"owner_open_id_str":""}],"enter_room_id"
+[05-01 02:07] [DEBUG] [网络] API 返回 JSON 结构: status_code=0, data.data length=1
+[05-01 02:07] [INFO] [控制] 停止采集
+[05-01 02:07] [INFO] [统计] 最终: 总计:0 | 0.0msg/s
+[05-01 02:07] [INFO] [控制] 采集主循环退出
