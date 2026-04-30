@@ -262,7 +262,24 @@ const BarrageApp = (function() {
             return items;
         }));
         const items = results.flat();
-        items.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
+        items.sort((a, b) => {
+            const timeA = a.time || '';
+            const timeB = b.time || '';
+            if (!timeA || !timeB) return 0;
+            const cmp = timeB.localeCompare(timeA);
+            if (cmp === 0) return 0;
+            const toSec = t => {
+                const parts = t.split(':');
+                return parts.length >= 2 ? parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + (parseInt(parts[2]) || 0) : 0;
+            };
+            const secA = toSec(timeA);
+            const secB = toSec(timeB);
+            const diff = Math.abs(secB - secA);
+            if (diff > 43200) {
+                return secB > secA ? -1 : 1;
+            }
+            return cmp;
+        });
         return items;
     }
 
@@ -285,29 +302,88 @@ const BarrageApp = (function() {
         }
     }
 
-    function renderLiveRoomList() {
-        const container = document.getElementById('live-room-options');
+    function initRoomSwitcher() {
+        const switchBtn = document.getElementById('room-switch-btn');
         const rooms = state.index.live_rooms || [];
 
-        if (rooms.length === 0) {
-            container.innerHTML = '<div class="custom-select-option disabled">暂无数据</div>';
+        if (!switchBtn || rooms.length <= 1) {
+            if (switchBtn) switchBtn.style.display = 'none';
             return;
         }
 
-        container.innerHTML = rooms.map(room => {
-            const displayName = room.anchor_name || room.live_id;
+        switchBtn.style.display = 'inline-flex';
+        switchBtn.replaceWith(switchBtn.cloneNode(true));
+
+        document.getElementById('room-switch-btn').addEventListener('click', () => {
+            showRoomSwitchModal();
+        });
+
+        document.getElementById('room-switch-close').addEventListener('click', () => {
+            hideRoomSwitchModal();
+        });
+
+        document.getElementById('room-switch-overlay').addEventListener('click', () => {
+            hideRoomSwitchModal();
+        });
+    }
+
+    function showRoomSwitchModal() {
+        const modal = document.getElementById('room-switch-modal');
+        const list = document.getElementById('room-list');
+        const rooms = state.index.live_rooms || [];
+
+        list.innerHTML = rooms.map(r => {
+            const isActive = r.live_id === state.currentLiveId;
+            const displayName = r.anchor_name || r.live_id;
+            const totalStats = r.total_stats || {};
+            const totalCount = Object.values(totalStats).reduce((sum, v) => sum + (v || 0), 0);
             return `
-                <div class="custom-select-option" data-value="${room.live_id}" data-label="${escapeHtml(displayName)}">
-                    ${escapeHtml(displayName)}
-                    <span class="option-meta">${room.session_count} 个会话</span>
+                <div class="room-list-item ${isActive ? 'active' : ''}" data-live-id="${r.live_id}">
+                    <img class="room-list-avatar" src="data/barrage/${r.live_id}/avatar.jpg" alt="${escapeHtml(displayName)}" onerror="this.src='${getPlaceholderSvg()}';">
+                    <div class="room-list-info">
+                        <div class="room-list-name">${escapeHtml(displayName)}</div>
+                        <div class="room-list-stats">
+                            <span>${r.session_count || 0} 会话</span>
+                            <span>${totalCount.toLocaleString()} 条弹幕</span>
+                        </div>
+                    </div>
+                    ${isActive ? '<div class="room-list-check">✓</div>' : ''}
                 </div>
             `;
         }).join('');
 
-        const firstRoom = rooms[0];
-        const firstName = firstRoom.anchor_name || firstRoom.live_id;
-        document.querySelector('#live-room-select .custom-select-trigger span').textContent = firstName;
+        list.querySelectorAll('.room-list-item').forEach(el => {
+            el.addEventListener('click', () => {
+                const liveId = el.dataset.liveId;
+                if (liveId !== state.currentLiveId) {
+                    selectLiveRoom(liveId);
+                }
+                hideRoomSwitchModal();
+            });
+        });
 
+        modal.style.display = 'block';
+        setTimeout(() => modal.classList.add('active'), 10);
+    }
+
+    function hideRoomSwitchModal() {
+        const modal = document.getElementById('room-switch-modal');
+        modal.classList.remove('active');
+        setTimeout(() => modal.style.display = 'none', 200);
+    }
+
+    function getPlaceholderSvg() {
+        return "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><rect fill='%23ddd' width='48' height='48'/><text x='24' y='24' text-anchor='middle' dy='.3em' fill='%23999' font-size='16'>?</text></svg>";
+    }
+
+    function renderLiveRoomList() {
+        const rooms = state.index.live_rooms || [];
+
+        if (rooms.length === 0) return;
+
+        initRoomSwitcher();
+
+        const firstRoom = rooms[0];
         selectLiveRoom(firstRoom.live_id);
     }
 
@@ -322,6 +398,16 @@ const BarrageApp = (function() {
     }
 
     async function selectLiveRoom(liveId) {
+        if (state.currentLiveId && state.currentLiveId !== liveId) {
+            showLoading(true, '切换直播间...');
+            document.getElementById('barrage-list').classList.add('hidden');
+            document.getElementById('type-stats').classList.add('hidden');
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('type-filters').classList.add('hidden');
+            document.getElementById('search-input').value = '';
+            document.getElementById('search-input').disabled = true;
+        }
+
         state.currentLiveId = liveId;
         state.roomData = [];
         state.searchIndex = { session: null, room: null };
@@ -347,8 +433,12 @@ const BarrageApp = (function() {
             document.getElementById('subtitle').textContent = `直播间: ${liveId}${title}`;
 
             document.getElementById('search-box').classList.remove('hidden');
+            showLoading(false);
 
-            if (sessions.length === 0) return;
+            if (sessions.length === 0) {
+                showEmpty('该直播间暂无会话数据');
+                return;
+            }
 
             renderYearList(sessions);
             renderDateFilterOptions(sessions);
@@ -370,6 +460,8 @@ const BarrageApp = (function() {
             }
         } catch (error) {
             console.error('加载直播间索引失败:', error);
+            showLoading(false);
+            showEmpty('加载直播间数据失败');
         }
     }
 
@@ -613,7 +705,31 @@ const BarrageApp = (function() {
             }
         }
 
-        allItems.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
+        allItems.sort((a, b) => {
+            const sessA = a._session || '';
+            const sessB = b._session || '';
+            const dateA = sessA.split('_')[0] || '';
+            const dateB = sessB.split('_')[0] || '';
+            if (dateA !== dateB) {
+                return dateB.localeCompare(dateA);
+            }
+            const timeA = a.time || '';
+            const timeB = b.time || '';
+            if (!timeA || !timeB) return 0;
+            const cmp = timeB.localeCompare(timeA);
+            if (cmp === 0) return 0;
+            const toSec = t => {
+                const parts = t.split(':');
+                return parts.length >= 2 ? parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + (parseInt(parts[2]) || 0) : 0;
+            };
+            const secA = toSec(timeA);
+            const secB = toSec(timeB);
+            const diff = Math.abs(secB - secA);
+            if (diff > 43200) {
+                return secB > secA ? -1 : 1;
+            }
+            return cmp;
+        });
         state.roomData = allItems;
         buildSearchIndex(state.roomData);
     }
@@ -967,13 +1083,6 @@ const BarrageApp = (function() {
     }
 
     function handleSelectChange(selectId, value, option) {
-        if (selectId === 'live-room-select') {
-            const label = option.dataset.label || value;
-            document.querySelector('#live-room-select .custom-select-trigger span').textContent = label;
-            selectLiveRoom(value);
-            return;
-        }
-
         if (selectId === 'year-select') {
             selectYear(value);
             return;

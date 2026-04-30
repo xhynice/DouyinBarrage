@@ -13,7 +13,17 @@
             <div class="header-content">
                 <img id="header-avatar" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'><rect fill='%23ddd' width='28' height='28'/><text x='14' y='14' text-anchor='middle' dy='.3em' fill='%23999' font-size='10'>?</text></svg>" alt="头像" class="header-avatar">
                 <div class="header-text">
-                    <h1 id="header-title">弹幕记录</h1>
+                    <div class="title-wrapper">
+                        <h1 id="header-title">弹幕记录</h1>
+                        <button class="room-switch-btn" id="room-switch-btn" style="display: none;" title="切换直播间">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                        </button>
+                    </div>
                     <p class="subtitle" id="subtitle">选择直播间查看弹幕</p>
                 </div>
             </div>
@@ -39,14 +49,6 @@
 
         <nav class="nav">
             <div class="filter-group">
-                <div class="custom-select filter-custom-select" id="live-room-select">
-                    <div class="custom-select-trigger">
-                        <span>选择直播间</span>
-                        <svg class="custom-select-arrow" viewBox="0 0 12 12"><path d="M6 8L1 3h10z"/></svg>
-                    </div>
-                    <div class="custom-select-options" id="live-room-options"></div>
-                </div>
-
                 <div class="custom-select filter-custom-select hidden" id="year-select">
                     <div class="custom-select-trigger">
                         <span>选择年份</span>
@@ -109,6 +111,17 @@
                 <button id="load-more-btn">加载更多</button>
             </div>
         </main>
+
+        <div class="room-switch-modal" id="room-switch-modal" style="display: none;">
+            <div class="room-switch-overlay" id="room-switch-overlay"></div>
+            <div class="room-switch-content">
+                <div class="room-switch-header">
+                    <h3>选择直播间</h3>
+                    <button class="room-switch-close" id="room-switch-close">&times;</button>
+                </div>
+                <div class="room-list" id="room-list"></div>
+            </div>
+        </div>
 
         <footer class="footer">
             <p>DouyinBarrage - 抖音直播弹幕采集工具</p>
