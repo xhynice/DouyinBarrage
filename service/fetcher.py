@@ -489,7 +489,6 @@ class DouyinBarrage:
                                 break
                             time.sleep(0.5)
                     else:
-                        last_output_time = 0
                         for _ in range(int(poll_interval / 0.5)):
                             if stop_event.is_set() or self._stop_event.is_set():
                                 break
@@ -500,9 +499,7 @@ class DouyinBarrage:
                             old_len = self._queue_handler._polling_len
                             pad = max(old_len - display_width(text), 0)
                             if is_ci_environment():
-                                if elapsed - last_output_time >= 30 or remaining <= 5:
-                                    print(text)
-                                    last_output_time = elapsed
+                                print(text)
                             else:
                                 sys.stderr.write('\r' + text + ' ' * pad)
                                 sys.stderr.flush()
