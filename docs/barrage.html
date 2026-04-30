@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>弹幕记录 - DouyinBarrage</title>
+    <link rel="stylesheet" href="barrage.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <img id="header-avatar" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'><rect fill='%23ddd' width='28' height='28'/><text x='14' y='14' text-anchor='middle' dy='.3em' fill='%23999' font-size='10'>?</text></svg>" alt="头像" class="header-avatar">
+                <div class="header-text">
+                    <h1 id="header-title">弹幕记录</h1>
+                    <p class="subtitle" id="subtitle">选择直播间查看弹幕</p>
+                </div>
+            </div>
+            <div class="stats hidden" id="stats">
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-chat">0</span>
+                    <span class="stat-label">聊天</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-gift">0</span>
+                    <span class="stat-label">礼物</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-social">0</span>
+                    <span class="stat-label">关注</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-pv">-</span>
+                    <span class="stat-label">总观看</span>
+                </div>
+            </div>
+        </header>
+
+        <nav class="nav">
+            <div class="filter-group">
+                <div class="custom-select filter-custom-select" id="live-room-select">
+                    <div class="custom-select-trigger">
+                        <span>选择直播间</span>
+                        <svg class="custom-select-arrow" viewBox="0 0 12 12"><path d="M6 8L1 3h10z"/></svg>
+                    </div>
+                    <div class="custom-select-options" id="live-room-options"></div>
+                </div>
+
+                <div class="custom-select filter-custom-select hidden" id="year-select">
+                    <div class="custom-select-trigger">
+                        <span>选择年份</span>
+                        <svg class="custom-select-arrow" viewBox="0 0 12 12"><path d="M6 8L1 3h10z"/></svg>
+                    </div>
+                    <div class="custom-select-options" id="year-options"></div>
+                </div>
+
+                <div class="custom-select filter-custom-select hidden" id="datetime-select">
+                    <div class="custom-select-trigger">
+                        <span>选择日期时间</span>
+                        <svg class="custom-select-arrow" viewBox="0 0 12 12"><path d="M6 8L1 3h10z"/></svg>
+                    </div>
+                    <div class="custom-select-options" id="datetime-options"></div>
+                </div>
+            </div>
+
+            <div class="search-box hidden" id="search-box">
+                <div class="custom-select" id="date-filter-wrapper">
+                    <div class="custom-select-trigger" data-value="session">
+                        <span>当前会话</span>
+                        <svg class="custom-select-arrow" viewBox="0 0 12 12"><path d="M6 8L1 3h10z"/></svg>
+                    </div>
+                    <div class="custom-select-options" id="date-filter-options">
+                        <div class="custom-select-option active" data-value="session">当前会话</div>
+                    </div>
+                </div>
+                <input type="search" id="search-input" placeholder="搜内容，@搜用户..." disabled>
+                <button id="search-btn" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+                    </svg>
+                </button>
+            </div>
+        </nav>
+
+        <div class="type-filters hidden" id="type-filters"></div>
+
+        <div class="filter-info hidden" id="filter-info">
+            <span id="filter-text"></span>
+            <button class="clear-filter-btn hidden" id="clear-filter-btn">清除筛选</button>
+        </div>
+
+        <main class="main-content">
+            <div class="loading hidden" id="loading">
+                <div class="spinner"></div>
+                <p>加载中...</p>
+            </div>
+
+            <div class="empty-state" id="empty-state">
+                <div class="empty-icon">📺</div>
+                <p>请选择直播间和会话查看弹幕</p>
+            </div>
+
+            <div class="type-stats hidden" id="type-stats"></div>
+
+            <div class="barrage-list hidden" id="barrage-list"></div>
+
+            <div class="load-more hidden" id="load-more">
+                <button id="load-more-btn">加载更多</button>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>DouyinBarrage - 抖音直播弹幕采集工具</p>
+        </footer>
+    </div>
+
+    <script src="barrage.js"></script>
+</body>
+</html>

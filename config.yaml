@@ -1,0 +1,56 @@
+# ==================== 多房间配置 ====================
+rooms:
+  - id: "126833924894"
+    name: "张君雅1v4⁸⁰⁰⁸"
+    enabled: true
+  - id: "371992233267"
+    name: "Polaris熠熠🌟"
+    enabled: true
+  - id: "188566761315"
+    name: "小田村（户外版）"
+    enabled: true
+
+# ==================== 日志配置 ====================
+log_level: DEBUG                  # 日志级别: DEBUG / INFO / WARNING / ERROR / NONE（NONE=关闭日志，数据文件照常写入）
+
+# ==================== Cookie 配置 ====================
+cookie_file: cookie.txt          # Cookie 文件路径（相对于脚本目录），不存在则以游客身份采集
+
+# ==================== 等待开播配置 ====================
+live_stop: true                  # 直播结束后是否停止退出: true=结束退出 / false=等待重开播
+live_check_interval: 120         # 未开播时 HTTP 轮询间隔（秒）
+
+# ==================== 输出配置 ====================
+output:
+  chat: true                     # 弹幕
+  lucky_bag: true                # 福袋口令
+  gift: true                     # 礼物
+  like: true                     # 点赞
+  member: false                  # 进场
+  social: true                   # 关注/分享
+  rank: false                    # 排行榜
+  stats: true                    # 统计
+  fansclub: false                # 粉丝团
+  emoji: false                   # 表情
+  room: false                    # 直播间公告
+  roomstats: false               # 直播统计
+  control: true                  # 直播状态
+  file_format: csv              # 输出格式: csv / json (JSONL) / both / none
+  file_dir: data                 # 数据输出目录
+
+# ==================== 网络配置 ====================
+network:
+  http_timeout: 15               # HTTP 超时（秒），超时后自动 ×1.5，封顶 60s，最多重试 3 次
+  ws_connect_timeout: 30         # WebSocket 底层 socket 超时（秒）
+  silence_timeout: 60            # 看门狗静默阈值（秒），超过则判定断连并重连
+  heartbeat_interval: 10         # 心跳间隔（秒）
+  rcvbuf_kb: 256                 # 接收缓冲区（KB），高流量直播间建议 512
+  proxy: null                    # 代理地址，如 {"http": "http://127.0.0.1:8080", "https": "socks5://127.0.0.1:1080"}
+
+# ==================== 重连配置 ====================
+max_reconnects: 3                # 最大重连次数（0 = 无限）
+reconnect_base_delay: 2          # 重连基础延迟（秒），指数退避：2s → 4s → 8s → ...
+reconnect_max_delay: 120         # 最大重连延迟（秒），退避封顶
+
+# ==================== 统计配置 ====================
+stats_interval: 300              # 吞吐统计打印间隔（秒）

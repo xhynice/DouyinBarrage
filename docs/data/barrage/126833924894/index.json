@@ -1,0 +1,304 @@
+{
+  "live_id": "126833924894",
+  "sessions": [
+    {
+      "session_id": "20260424_1203_7632171016466238259",
+      "live_id": "126833924894",
+      "available_types": [
+        "chat",
+        "control",
+        "gift",
+        "like",
+        "social",
+        "stats"
+      ],
+      "stats": {
+        "chat": 12514,
+        "control": 1,
+        "gift": 5358,
+        "like": 4519,
+        "social": 396,
+        "stats": 2250
+      },
+      "total": 25038,
+      "rankings": {
+        "chat": {
+          "top_users": [
+            {
+              "name": "抖音小肋手",
+              "count": 167
+            },
+            {
+              "name": "包袱，剪的，锤",
+              "count": 138
+            },
+            {
+              "name": "草履虫",
+              "count": 127
+            },
+            {
+              "name": "？ ？？",
+              "count": 116
+            },
+            {
+              "name": "BWRZ(记录美好)2",
+              "count": 90
+            },
+            {
+              "name": "금류年",
+              "count": 82
+            }
+          ],
+          "top_at": [
+            {
+              "name": "抖音小肋手",
+              "count": 23
+            },
+            {
+              "name": "深情不及久伴",
+              "count": 23
+            },
+            {
+              "name": "ら孤痞",
+              "count": 15
+            },
+            {
+              "name": "九月是只喵",
+              "count": 13
+            },
+            {
+              "name": "拜君仙⁹⁰⁹²⁷",
+              "count": 12
+            },
+            {
+              "name": "难懂.",
+              "count": 10
+            }
+          ]
+        },
+        "gift": {
+          "top_users": [
+            {
+              "name": "萌妹吖",
+              "diamond": 6019,
+              "max_gift": "钻石游轮",
+              "max_gift_diamond": 6000
+            },
+            {
+              "name": "张君雅的啤酒瓶",
+              "diamond": 4459,
+              "max_gift": "跑车",
+              "max_gift_diamond": 1200
+            },
+            {
+              "name": "小顾",
+              "diamond": 1219,
+              "max_gift": "跑车",
+              "max_gift_diamond": 1200
+            },
+            {
+              "name": "也甜",
+              "diamond": 685,
+              "max_gift": "为你闪耀",
+              "max_gift_diamond": 189
+            },
+            {
+              "name": "一起吃肯德基吗",
+              "diamond": 520,
+              "max_gift": "热气球",
+              "max_gift_diamond": 520
+            },
+            {
+              "name": "小野猫ᰔᩚ ⁵¹⁰⁷⁴",
+              "diamond": 297,
+              "max_gift": "为你闪耀",
+              "max_gift_diamond": 90
+            }
+          ],
+          "total_diamond": 23851
+        },
+        "like": {
+          "top_users": [
+            {
+              "name": "抖音小肋手",
+              "count": 2975
+            },
+            {
+              "name": "张君雅的陛下⁵¹⁰⁷⁴",
+              "count": 2907
+            },
+            {
+              "name": "洛皮皮🐻‍❄️⁰⁵⁰³",
+              "count": 2418
+            },
+            {
+              "name": "暖心❤️向阳",
+              "count": 2358
+            },
+            {
+              "name": "島嶼未眠",
+              "count": 2166
+            },
+            {
+              "name": "黑风寨萧瑟(嗷呜~)",
+              "count": 2151
+            }
+          ],
+          "total_likes": 88227
+        }
+      },
+      "gift_diamond": 23851,
+      "total_pv": 330000
+    },
+    {
+      "session_id": "20260424_2102_7632309608329136906",
+      "live_id": "126833924894",
+      "available_types": [
+        "chat",
+        "gift",
+        "like",
+        "social",
+        "stats"
+      ],
+      "stats": {
+        "chat": 1373,
+        "gift": 1980,
+        "like": 1850,
+        "social": 99,
+        "stats": 770
+      },
+      "total": 6072,
+      "rankings": {
+        "chat": {
+          "top_users": [
+            {
+              "name": "老吴来6你咯",
+              "count": 26
+            },
+            {
+              "name": "洋  仔⁸⁰⁰⁸",
+              "count": 19
+            },
+            {
+              "name": "奶瓶装满酒",
+              "count": 16
+            },
+            {
+              "name": "平常心",
+              "count": 16
+            },
+            {
+              "name": "阿刘",
+              "count": 15
+            },
+            {
+              "name": "🥐cornetto",
+              "count": 14
+            }
+          ],
+          "top_at": [
+            {
+              "name": "深情不及久伴",
+              "count": 11
+            },
+            {
+              "name": "阿刘",
+              "count": 8
+            },
+            {
+              "name": "奶瓶装满酒",
+              "count": 8
+            },
+            {
+              "name": "ら孤痞",
+              "count": 7
+            },
+            {
+              "name": "୧⍤⃝🥕    向新行",
+              "count": 7
+            },
+            {
+              "name": "✨名门⭐️",
+              "count": 6
+            }
+          ]
+        },
+        "gift": {
+          "top_users": [
+            {
+              "name": "张君雅的啤酒瓶",
+              "diamond": 3372,
+              "max_gift": "为你举牌",
+              "max_gift_diamond": 597
+            },
+            {
+              "name": "《有成》",
+              "diamond": 810,
+              "max_gift": "为你闪耀",
+              "max_gift_diamond": 108
+            },
+            {
+              "name": "禹凪",
+              "diamond": 521,
+              "max_gift": "热气球",
+              "max_gift_diamond": 520
+            },
+            {
+              "name": "久久💞ــــﮩﮩ٨",
+              "diamond": 521,
+              "max_gift": "真的爱你",
+              "max_gift_diamond": 520
+            },
+            {
+              "name": "@L_Y@⁵¹⁰⁷⁴₈₀₀₈",
+              "diamond": 520,
+              "max_gift": "热气球",
+              "max_gift_diamond": 520
+            },
+            {
+              "name": "L～Aug",
+              "diamond": 384,
+              "max_gift": "一束花开",
+              "max_gift_diamond": 366
+            }
+          ],
+          "total_diamond": 10840
+        },
+        "like": {
+          "top_users": [
+            {
+              "name": "昭童🐈‍⬛",
+              "count": 1401
+            },
+            {
+              "name": "云",
+              "count": 1146
+            },
+            {
+              "name": "@？～￥￥￥￥ycfx",
+              "count": 1088
+            },
+            {
+              "name": "酃",
+              "count": 1062
+            },
+            {
+              "name": "雨夜！！！",
+              "count": 987
+            },
+            {
+              "name": "张君雅的啤酒瓶",
+              "count": 932
+            }
+          ],
+          "total_likes": 33543
+        }
+      },
+      "gift_diamond": 10840,
+      "total_pv": 104000
+    }
+  ],
+  "anchor_name": "张君雅1v4⁸⁰⁰⁸",
+  "anchor_avatar": "https://p3.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_f3d3d462dd79d7978b9573ebbdb9e529.jpeg?from=3067671334",
+  "room_title": "最精彩的战神局钢枪直播间"
+}

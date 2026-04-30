@@ -1,0 +1,73 @@
+{
+  "live_rooms": [
+    {
+      "live_id": "126833924894",
+      "anchor_name": "张君雅1v4⁸⁰⁰⁸",
+      "session_count": 2,
+      "latest_session": "20260424_2102_7632309608329136906",
+      "total_stats": {
+        "chat": 13887,
+        "control": 1,
+        "gift": 7338,
+        "like": 6369,
+        "social": 495,
+        "stats": 3020
+      }
+    }
+  ],
+  "type_config": {
+    "chat": {
+      "label": "弹幕",
+      "icon": ""
+    },
+    "gift": {
+      "label": "礼物",
+      "icon": "🎁"
+    },
+    "lucky_bag": {
+      "label": "福袋",
+      "icon": "🎯"
+    },
+    "member": {
+      "label": "进场",
+      "icon": "👤"
+    },
+    "social": {
+      "label": "关注",
+      "icon": "❤️"
+    },
+    "like": {
+      "label": "点赞",
+      "icon": "👍"
+    },
+    "fansclub": {
+      "label": "粉丝团",
+      "icon": "🏆"
+    },
+    "stats": {
+      "label": "统计",
+      "icon": "📊"
+    },
+    "roomstats": {
+      "label": "房间统计",
+      "icon": "📊"
+    },
+    "room": {
+      "label": "房间",
+      "icon": "🏠"
+    },
+    "rank": {
+      "label": "排行",
+      "icon": "🏅"
+    },
+    "control": {
+      "label": "控制",
+      "icon": "⚙️"
+    },
+    "emoji": {
+      "label": "表情",
+      "icon": "😀"
+    }
+  },
+  "generated_at": "2026-04-24 22:01:02"
+}
