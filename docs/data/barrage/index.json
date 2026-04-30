@@ -3,15 +3,15 @@
     {
       "live_id": "126833924894",
       "anchor_name": "张君雅1v4⁸⁰⁰⁸",
-      "session_count": 2,
-      "latest_session": "20260424_2102_7632309608329136906",
+      "session_count": 7,
+      "latest_session": "20260430_2101_7634536132025305902",
       "total_stats": {
-        "chat": 13887,
-        "control": 1,
-        "gift": 7338,
-        "like": 6369,
-        "social": 495,
-        "stats": 3020
+        "chat": 61048,
+        "control": 7,
+        "gift": 54167,
+        "like": 30507,
+        "social": 3984,
+        "stats": 17037
       }
     }
   ],
@@ -69,5 +69,5 @@
       "icon": "😀"
     }
   },
-  "generated_at": "2026-04-24 22:01:02"
+  "generated_at": "2026-04-30 18:23:13"
 }

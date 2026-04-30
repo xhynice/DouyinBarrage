@@ -3,76 +3,84 @@
   "live_id": "126833924894",
   "available_types": [
     "chat",
+    "control",
     "gift",
     "like",
     "social",
     "stats"
   ],
   "stats": {
-    "chat": 1373,
-    "gift": 1980,
-    "like": 1850,
-    "social": 99,
-    "stats": 770
+    "chat": 5899,
+    "control": 1,
+    "gift": 4836,
+    "like": 4047,
+    "social": 412,
+    "stats": 2128
   },
-  "total": 6072,
+  "total": 17323,
   "rankings": {
     "chat": {
       "top_users": [
         {
+          "name": "深情不及久伴",
+          "count": 83
+        },
+        {
+          "name": "酃",
+          "count": 52
+        },
+        {
           "name": "老吴来6你咯",
-          "count": 26
+          "count": 48
         },
         {
-          "name": "洋  仔⁸⁰⁰⁸",
-          "count": 19
+          "name": "太阳☀",
+          "count": 41
         },
         {
-          "name": "奶瓶装满酒",
-          "count": 16
+          "name": "喵🐾媚娘",
+          "count": 39
         },
         {
-          "name": "平常心",
-          "count": 16
-        },
-        {
-          "name": "阿刘",
-          "count": 15
-        },
-        {
-          "name": "🥐cornetto",
-          "count": 14
+          "name": "tae.",
+          "count": 38
         }
       ],
       "top_at": [
         {
           "name": "深情不及久伴",
-          "count": 11
+          "count": 74
         },
         {
-          "name": "阿刘",
-          "count": 8
+          "name": "自＾渡",
+          "count": 27
         },
         {
-          "name": "奶瓶装满酒",
-          "count": 8
+          "name": "人间边客",
+          "count": 27
+        },
+        {
+          "name": "久久💞ــــﮩﮩ٨",
+          "count": 26
+        },
+        {
+          "name": "喵🐾媚娘",
+          "count": 25
         },
         {
           "name": "ら孤痞",
-          "count": 7
-        },
-        {
-          "name": "୧⍤⃝🥕    向新行",
-          "count": 7
-        },
-        {
-          "name": "✨名门⭐️",
-          "count": 6
+          "count": 22
         }
       ]
     },
     "gift": {
       "top_users": [
+        {
+          "name": "Kun°",
+          "diamond": 10001,
+          "max_gift": "抖音1号",
+          "max_gift_diamond": 10001
+        },
         {
           "name": "张君雅的啤酒瓶",
           "diamond": 3372,
@@ -80,68 +88,62 @@
           "max_gift_diamond": 597
         },
         {
-          "name": "《有成》",
-          "diamond": 810,
-          "max_gift": "为你闪耀",
-          "max_gift_diamond": 108
+          "name": "我就不爱看🐸",
+          "diamond": 1800,
+          "max_gift": "PK宝箱",
+          "max_gift_diamond": 1200
         },
         {
-          "name": "禹凪",
-          "diamond": 521,
-          "max_gift": "热气球",
-          "max_gift_diamond": 520
-        },
-        {
-          "name": "久久💞ــــﮩﮩ٨",
-          "diamond": 521,
+          "name": "有心人",
+          "diamond": 1187,
           "max_gift": "真的爱你",
           "max_gift_diamond": 520
         },
         {
-          "name": "@L_Y@⁵¹⁰⁷⁴₈₀₀₈",
-          "diamond": 520,
+          "name": "mwzz",
+          "diamond": 1040,
           "max_gift": "热气球",
           "max_gift_diamond": 520
         },
         {
-          "name": "L～Aug",
-          "diamond": 384,
-          "max_gift": "一束花开",
-          "max_gift_diamond": 366
+          "name": "老吴来6你咯",
+          "diamond": 827,
+          "max_gift": "人气票",
+          "max_gift_diamond": 46
         }
       ],
-      "total_diamond": 10840
+      "total_diamond": 35371
     },
     "like": {
       "top_users": [
         {
-          "name": "昭童🐈‍⬛",
-          "count": 1401
-        },
-        {
-          "name": "云",
-          "count": 1146
-        },
-        {
-          "name": "@？～￥￥￥￥ycfx",
-          "count": 1088
-        },
-        {
-          "name": "酃",
-          "count": 1062
+          "name": "H",
+          "count": 2487
         },
         {
           "name": "雨夜！！！",
-          "count": 987
+          "count": 2157
         },
         {
-          "name": "张君雅的啤酒瓶",
-          "count": 932
+          "name": "独拥小雯殿下",
+          "count": 1810
+        },
+        {
+          "name": "‘安静’",
+          "count": 1698
+        },
+        {
+          "name": "Summer",
+          "count": 1585
+        },
+        {
+          "name": "昭童🐈‍⬛",
+          "count": 1401
         }
       ],
-      "total_likes": 33543
+      "total_likes": 83100
     }
   },
-  "gift_diamond": 10840,
-  "total_pv": 104000
+  "gift_diamond": 35371,
+  "total_pv": 240000
 }

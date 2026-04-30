@@ -1,0 +1,149 @@
+{
+  "session_id": "20260430_2101_7634536132025305902",
+  "live_id": "126833924894",
+  "available_types": [
+    "chat",
+    "control",
+    "gift",
+    "like",
+    "social",
+    "stats"
+  ],
+  "stats": {
+    "chat": 9843,
+    "control": 1,
+    "gift": 10576,
+    "like": 4895,
+    "social": 602,
+    "stats": 2635
+  },
+  "total": 28552,
+  "rankings": {
+    "chat": {
+      "top_users": [
+        {
+          "name": "抖音小肋手",
+          "count": 154
+        },
+        {
+          "name": "喵🐾媚娘",
+          "count": 98
+        },
+        {
+          "name": "贝塔β",
+          "count": 68
+        },
+        {
+          "name": "我心向",
+          "count": 54
+        },
+        {
+          "name": "朝暮²⁷⁷",
+          "count": 53
+        },
+        {
+          "name": "ەㅤㅤㅤㅤㅤㅤㅤㅤㅤ一个蛋🥚 ㅤㅤㅤㅤ",
+          "count": 52
+        }
+      ],
+      "top_at": [
+        {
+          "name": "ら孤痞",
+          "count": 40
+        },
+        {
+          "name": "野生小厨",
+          "count": 24
+        },
+        {
+          "name": "抖音小肋手",
+          "count": 21
+        },
+        {
+          "name": "懒得起名字",
+          "count": 16
+        },
+        {
+          "name": "拜君仙⁹⁰⁹²⁷",
+          "count": 13
+        },
+        {
+          "name": "喵🐾媚娘",
+          "count": 13
+        }
+      ]
+    },
+    "gift": {
+      "top_users": [
+        {
+          "name": "子一",
+          "diamond": 11737,
+          "max_gift": "抖音1号",
+          "max_gift_diamond": 10001
+        },
+        {
+          "name": "Kun°",
+          "diamond": 10806,
+          "max_gift": "一眼心动",
+          "max_gift_diamond": 5200
+        },
+        {
+          "name": "⭐⭐⭐",
+          "diamond": 6287,
+          "max_gift": "苟住",
+          "max_gift_diamond": 1340
+        },
+        {
+          "name": "@L_Y@⁵¹⁰⁷⁴₈₀₀₈",
+          "diamond": 3206,
+          "max_gift": "气球雨",
+          "max_gift_diamond": 2888
+        },
+        {
+          "name": "颖",
+          "diamond": 3000,
+          "max_gift": "神秘飞机",
+          "max_gift_diamond": 3000
+        },
+        {
+          "name": "喏喏",
+          "diamond": 2401,
+          "max_gift": "跑车",
+          "max_gift_diamond": 1200
+        }
+      ],
+      "total_diamond": 76083
+    },
+    "like": {
+      "top_users": [
+        {
+          "name": "苦菊",
+          "count": 2322
+        },
+        {
+          "name": "K I",
+          "count": 2187
+        },
+        {
+          "name": "16",
+          "count": 1950
+        },
+        {
+          "name": "Gu 小婷儿👸🏻",
+          "count": 1911
+        },
+        {
+          "name": "巫玫狗",
+          "count": 1701
+        },
+        {
+          "name": "陈同学",
+          "count": 1689
+        }
+      ],
+      "total_likes": 98522
+    }
+  },
+  "gift_diamond": 76083,
+  "total_pv": 256000
+}
