@@ -21,6 +21,14 @@ from collections import deque
 from base.utils import SCRIPT_DIR
 
 
+def is_ci_environment():
+    """检测是否在 CI 环境中运行（GitHub Actions 等）。
+
+    CI 环境不支持 \\r 回到行首，需要禁用单行刷新输出。
+    """
+    return bool(os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'))
+
+
 def display_width(s: str) -> int:
     """计算字符串在终端中的显示列宽（处理 CJK / emoji 等宽字符）。"""
     width = 0
@@ -141,15 +149,17 @@ class QueueHandler(logging.Handler):
                     if r.levelno < h.level:
                         continue
                     if self.multi_room and is_console:
-                        try:
-                            sys.stderr.write('\r' + ' ' * self._panel_max_len + '\r')
-                        except OSError:
-                            pass
+                        if not is_ci_environment():
+                            try:
+                                sys.stderr.write('\r' + ' ' * self._panel_max_len + '\r')
+                            except OSError:
+                                pass
                     elif is_console and self._polling_len > 0:
-                        try:
-                            sys.stderr.write('\r' + ' ' * self._polling_len + '\r')
-                        except OSError:
-                            pass
+                        if not is_ci_environment():
+                            try:
+                                sys.stderr.write('\r' + ' ' * self._polling_len + '\r')
+                            except OSError:
+                                pass
                     h.emit(r)
                 except Exception:
                     pass
@@ -239,8 +249,11 @@ class QueueHandler(logging.Handler):
         pad = max(self._panel_max_len - new_len, 0)
         self._panel_max_len = max(self._panel_max_len, new_len)
         try:
-            sys.stderr.write('\r' + text + ' ' * pad)
-            sys.stderr.flush()
+            if is_ci_environment():
+                print(text)
+            else:
+                sys.stderr.write('\r' + text + ' ' * pad)
+                sys.stderr.flush()
         except OSError:
             pass
 

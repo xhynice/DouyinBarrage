@@ -42,7 +42,7 @@ from base.utils import (
     generate_user_unique_id, extract_ua_version,
     rotate_ua,
 )
-from base.output import setup_logger, DataRecorder, ThroughputCounter, BARRAGE, RoomLogFilter, display_width
+from base.output import setup_logger, DataRecorder, ThroughputCounter, BARRAGE, RoomLogFilter, display_width, is_ci_environment
 from service.network import (
     fetch_ttwid, enter_room_api, download_image,
     build_http_headers,
@@ -498,8 +498,11 @@ class DouyinBarrage:
                             text = f'[等待开播] {room_label}轮询中{cursor} {remaining}s'
                             old_len = self._queue_handler._polling_len
                             pad = max(old_len - display_width(text), 0)
-                            sys.stderr.write('\r' + text + ' ' * pad)
-                            sys.stderr.flush()
+                            if is_ci_environment():
+                                print(text)
+                            else:
+                                sys.stderr.write('\r' + text + ' ' * pad)
+                                sys.stderr.flush()
                             self._queue_handler._polling_len = display_width(text)
                             time.sleep(0.5)
                     start_time = time.time()
@@ -507,7 +510,8 @@ class DouyinBarrage:
                 if is_multi:
                     self._queue_handler.clear_room_status(self.live_id)
                 else:
-                    sys.stderr.write('\r' + ' ' * self._queue_handler._polling_len + '\r')
+                    if not is_ci_environment():
+                        sys.stderr.write('\r' + ' ' * self._queue_handler._polling_len + '\r')
                     self._queue_handler._polling_len = 0
                 done_event.set()
                 if self._monitor_stop is stop_event:
