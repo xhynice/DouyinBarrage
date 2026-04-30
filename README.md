@@ -2,8 +2,8 @@
 
 > 抖音直播间弹幕数据实时采集器 — WebSocket 长连接，13 种消息类型，CSV/JSONL 双格式输出。
 
-![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
-![Node.js](https://img.shields.io/badge/Node.js-14+-green.svg)
+![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
+![Node.js](https://img.shields.io/badge/Node.js-22+-green.svg)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)
 
 ## 功能特性
