@@ -15,27 +15,27 @@ jobs:
       contents: write
     env:
       TZ: Asia/Shanghai
-    
+
     steps:
     - uses: actions/checkout@v4
       with:
         persist-credentials: true
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.x"
-    
+
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
         node-version: "20"
-    
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-    
+
     - name: Create cookie file from secret
       run: |
         if [ -n "${{ secrets.COOKIE_TXT }}" ]; then
@@ -44,7 +44,7 @@ jobs:
         else
           echo "未配置 COOKIE_TXT secret，将以游客身份采集"
         fi
-    
+
     - name: Get first live_id from config
       id: get-live-id
       run: |
@@ -58,7 +58,7 @@ jobs:
         else:
             print('live_id=')
         " >> $GITHUB_OUTPUT
-    
+
     - name: Run barrage collector
       run: |
         live_id="${{ github.event.inputs.live_id || steps.get-live-id.outputs.live_id }}"
@@ -69,10 +69,7 @@ jobs:
           echo "未找到直播间ID，跳过采集"
         fi
       continue-on-error: true
-    
-    - name: Build site data
-      run: python scripts/build_barrage.py
-    
+
     - name: Upload data artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -81,12 +78,12 @@ jobs:
           data/
           logs/
         retention-days: 3
-    
+
     - name: Commit data to repo
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add -f data/ docs/data/ logs/ 2>/dev/null || true
+        git add -f data/ logs/ 2>/dev/null || true
         git diff --quiet && git diff --staged --quiet || git commit -m "Update barrage data: $(date '+%Y-%m-%d %H:%M')"
         git push || echo "No changes to commit"
       continue-on-error: true
