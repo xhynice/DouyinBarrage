@@ -59,7 +59,7 @@ Ctrl+C
 | 参数 | 说明 |
 |------|------|
 | `live_id` | 直播间 ID（可选，不提供则交互式输入） |
-| `--log-level` | 覆盖日志级别：`DEBUG` / `INFO` / `WARNING` / `ERROR` / `NONE` |
+| `--log-level` | 覆盖日志级别：`DEBUG` / `BARRAGE` / `INFO` / `WARNING` / `ERROR` / `NONE` |
 | `--live-stop` | 直播结束后停止退出（默认跟随配置文件） |
 | `--live-wait` | 直播结束后等待重开播（默认跟随配置文件） |
 
