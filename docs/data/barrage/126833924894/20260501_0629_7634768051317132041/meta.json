@@ -1,0 +1,149 @@
+{
+  "session_id": "20260501_0629_7634768051317132041",
+  "live_id": "126833924894",
+  "available_types": [
+    "chat",
+    "control",
+    "gift",
+    "like",
+    "social",
+    "stats"
+  ],
+  "stats": {
+    "chat": 2038,
+    "control": 1,
+    "gift": 479,
+    "like": 635,
+    "social": 74,
+    "stats": 377
+  },
+  "total": 3604,
+  "rankings": {
+    "chat": {
+      "top_users": [
+        {
+          "name": "洛皮皮🐻‍❄️⁰⁵⁰³",
+          "count": 39
+        },
+        {
+          "name": "BWRZ（记录美好）",
+          "count": 34
+        },
+        {
+          "name": "Vincent",
+          "count": 21
+        },
+        {
+          "name": "YgTietnssgmexsn?",
+          "count": 20
+        },
+        {
+          "name": "忙里偷闲⁵¹⁰⁷⁴",
+          "count": 20
+        },
+        {
+          "name": "风沙迷了眼⁵¹⁰⁷⁴",
+          "count": 17
+        }
+      ],
+      "top_at": [
+        {
+          "name": "在机场等艘船",
+          "count": 8
+        },
+        {
+          "name": "知遇👣",
+          "count": 6
+        },
+        {
+          "name": "洛皮皮🐻‍❄️⁰⁵⁰³",
+          "count": 6
+        },
+        {
+          "name": "深情（张君雅助理）",
+          "count": 5
+        },
+        {
+          "name": "YgTietnssgmexsn?",
+          "count": 5
+        },
+        {
+          "name": "BWRZ（记录美好）",
+          "count": 4
+        }
+      ]
+    },
+    "gift": {
+      "top_users": [
+        {
+          "name": "Enor心诺",
+          "diamond": 2246,
+          "max_gift": "为你举牌",
+          "max_gift_diamond": 796
+        },
+        {
+          "name": "拾壹🐸",
+          "diamond": 1202,
+          "max_gift": "跑车",
+          "max_gift_diamond": 1200
+        },
+        {
+          "name": "若鱼",
+          "diamond": 366,
+          "max_gift": "真爱玫瑰",
+          "max_gift_diamond": 366
+        },
+        {
+          "name": "@L_Y@⁵¹⁰⁷⁴₈₀₀₈",
+          "diamond": 342,
+          "max_gift": "星光闪耀",
+          "max_gift_diamond": 81
+        },
+        {
+          "name": "ら孤痞",
+          "diamond": 325,
+          "max_gift": "为你举牌",
+          "max_gift_diamond": 199
+        },
+        {
+          "name": "YgTietnssgmexsn?",
+          "diamond": 199,
+          "max_gift": "为你举牌",
+          "max_gift_diamond": 199
+        }
+      ],
+      "total_diamond": 5384
+    },
+    "like": {
+      "top_users": [
+        {
+          "name": "洛皮皮🐻‍❄️⁰⁵⁰³",
+          "count": 1863
+        },
+        {
+          "name": "生活鸡飞蛋挞",
+          "count": 924
+        },
+        {
+          "name": "吃个汤圆（见过Roy²",
+          "count": 786
+        },
+        {
+          "name": "果酱不太甜",
+          "count": 714
+        },
+        {
+          "name": "狐狸对你笑",
+          "count": 645
+        },
+        {
+          "name": "我思故我在",
+          "count": 627
+        }
+      ],
+      "total_likes": 14502
+    }
+  },
+  "gift_diamond": 5384,
+  "total_pv": 357000
+}
