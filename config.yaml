@@ -11,7 +11,7 @@ rooms:
     enabled: true
 
 # ==================== 日志配置 ====================
-log_level: WARNING                  # 日志级别: DEBUG / INFO / WARNING / ERROR / NONE（NONE=关闭日志，数据文件照常写入）
+log_level: INFO                  # 日志级别: DEBUG / BARRAGE / INFO / WARNING / ERROR / NONE（NONE=关闭日志，数据文件照常写入）
 
 # ==================== Cookie 配置 ====================
 cookie_file: cookie.txt          # Cookie 文件路径（相对于脚本目录），不存在则以游客身份采集
@@ -53,4 +53,4 @@ reconnect_base_delay: 2          # 重连基础延迟（秒），指数退避：
 reconnect_max_delay: 120         # 最大重连延迟（秒），退避封顶
 
 # ==================== 统计配置 ====================
-stats_interval: 300              # 吞吐统计打印间隔（秒）
+stats_interval: 60              # 吞吐统计打印间隔（秒）

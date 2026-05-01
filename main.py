@@ -395,7 +395,7 @@ def main():
         add_help=False,
     )
     parser.add_argument('live_id', nargs='?', help='直播间 ID（不提供则交互式选择）')
-    parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'NONE'],
+    parser.add_argument('--log-level', choices=['DEBUG', 'BARRAGE', 'INFO', 'WARNING', 'ERROR', 'NONE'],
                         help='覆盖日志级别')
     parser.add_argument('--live-stop', action='store_true',
                         help='直播结束后停止退出（默认跟随配置文件）')
