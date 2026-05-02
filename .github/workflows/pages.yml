@@ -42,9 +42,9 @@ jobs:
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git pull --rebase origin main
         git add docs/data/ 2>/dev/null || true
         git diff --quiet && git diff --staged --quiet || git commit -m "Update site data: $(date '+%Y-%m-%d %H:%M')"
+        git pull --rebase origin main
         git push || echo "No changes to commit"
 
     - name: Prepare deployment directory
