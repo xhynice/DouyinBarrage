@@ -1,0 +1,149 @@
+{
+  "session_id": "20260502_2103_7635278384175631113",
+  "live_id": "126833924894",
+  "available_types": [
+    "chat",
+    "control",
+    "gift",
+    "like",
+    "social",
+    "stats"
+  ],
+  "stats": {
+    "chat": 10355,
+    "control": 1,
+    "gift": 11210,
+    "like": 5250,
+    "social": 788,
+    "stats": 3340
+  },
+  "total": 30944,
+  "rankings": {
+    "chat": {
+      "top_users": [
+        {
+          "name": "抖音小肋手",
+          "count": 177
+        },
+        {
+          "name": "洛皮皮🐻‍❄️⁰⁵⁰³",
+          "count": 121
+        },
+        {
+          "name": "༄᭄冰封ꦿᩚ࿐",
+          "count": 95
+        },
+        {
+          "name": "某某.",
+          "count": 75
+        },
+        {
+          "name": "YgTietnssgmexsn?",
+          "count": 69
+        },
+        {
+          "name": "记得加辣",
+          "count": 61
+        }
+      ],
+      "top_at": [
+        {
+          "name": "ら孤痞",
+          "count": 40
+        },
+        {
+          "name": "YgTietnssgmexsn?",
+          "count": 38
+        },
+        {
+          "name": "抖音小肋手",
+          "count": 34
+        },
+        {
+          "name": "深情不及久伴",
+          "count": 31
+        },
+        {
+          "name": "༄᭄冰封ꦿᩚ࿐",
+          "count": 26
+        },
+        {
+          "name": "深情（张君雅助理）",
+          "count": 16
+        }
+      ]
+    },
+    "gift": {
+      "top_users": [
+        {
+          "name": "YgTietnssgmexsn?",
+          "diamond": 88210,
+          "max_gift": "小心心",
+          "max_gift_diamond": 563
+        },
+        {
+          "name": "某某.",
+          "diamond": 76450,
+          "max_gift": "玫瑰",
+          "max_gift_diamond": 594
+        },
+        {
+          "name": "张君雅的啤酒瓶",
+          "diamond": 34635,
+          "max_gift": "抖音飞艇",
+          "max_gift_diamond": 20000
+        },
+        {
+          "name": "Leno Huang",
+          "diamond": 16100,
+          "max_gift": "抖音1号",
+          "max_gift_diamond": 10001
+        },
+        {
+          "name": "屿安",
+          "diamond": 8239,
+          "max_gift": "暮光星辰",
+          "max_gift_diamond": 1584
+        },
+        {
+          "name": "ら孤痞",
+          "diamond": 4198,
+          "max_gift": "为你举牌",
+          "max_gift_diamond": 1194
+        }
+      ],
+      "total_diamond": 264949
+    },
+    "like": {
+      "top_users": [
+        {
+          "name": "抖音小肋手",
+          "count": 5424
+        },
+        {
+          "name": "昕愿",
+          "count": 2781
+        },
+        {
+          "name": "相见不如怀念",
+          "count": 2175
+        },
+        {
+          "name": "刀斩相思情",
+          "count": 1830
+        },
+        {
+          "name": "攸",
+          "count": 1779
+        },
+        {
+          "name": "吃不了一点香菜",
+          "count": 1455
+        }
+      ],
+      "total_likes": 112272
+    }
+  },
+  "gift_diamond": 264949,
+  "total_pv": 339000
+}
