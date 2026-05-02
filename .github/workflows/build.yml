@@ -85,5 +85,5 @@ jobs:
         git config --local user.name "GitHub Action"
         git add -f data/ logs/ 2>/dev/null || true
         git diff --quiet && git diff --staged --quiet || git commit -m "Update barrage data: $(date '+%Y-%m-%d %H:%M')"
-        git push || echo "No changes to commit"
-      continue-on-error: true
+        git pull --rebase origin main
+        git push
