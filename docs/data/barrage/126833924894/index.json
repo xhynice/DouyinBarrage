@@ -1192,6 +1192,155 @@
       },
       "gift_diamond": 264949,
       "total_pv": 339000
+    },
+    {
+      "session_id": "20260503_1203_7635510678576581385",
+      "live_id": "126833924894",
+      "available_types": [
+        "chat",
+        "control",
+        "gift",
+        "like",
+        "social",
+        "stats"
+      ],
+      "stats": {
+        "chat": 9962,
+        "control": 1,
+        "gift": 42893,
+        "like": 4437,
+        "social": 921,
+        "stats": 3000
+      },
+      "total": 61214,
+      "rankings": {
+        "chat": {
+          "top_users": [
+            {
+              "name": "抖音小肋手",
+              "count": 420
+            },
+            {
+              "name": "@L_Y@⁵¹⁰⁷⁴₈₀₀₈",
+              "count": 145
+            },
+            {
+              "name": "旺崽剧场01",
+              "count": 121
+            },
+            {
+              "name": "YgTietnssgmexsn?",
+              "count": 96
+            },
+            {
+              "name": "洛皮皮🐻‍❄️⁰⁵⁰³",
+              "count": 88
+            },
+            {
+              "name": "忙里偷闲⁵¹⁰⁷⁴",
+              "count": 71
+            }
+          ],
+          "top_at": [
+            {
+              "name": "ら孤痞",
+              "count": 38
+            },
+            {
+              "name": "深情不及久伴",
+              "count": 29
+            },
+            {
+              "name": "久久💞ــــﮩﮩ٨",
+              "count": 19
+            },
+            {
+              "name": "YgTietnssgmexsn?",
+              "count": 18
+            },
+            {
+              "name": "九月是只喵",
+              "count": 11
+            },
+            {
+              "name": "野生小厨",
+              "count": 10
+            }
+          ]
+        },
+        "gift": {
+          "top_users": [
+            {
+              "name": "王某人（  ）⁵¹⁰⁷⁴",
+              "diamond": 124937,
+              "max_gift": "人气票",
+              "max_gift_diamond": 520
+            },
+            {
+              "name": "遗忘的回忆",
+              "diamond": 70697,
+              "max_gift": "人气票",
+              "max_gift_diamond": 527
+            },
+            {
+              "name": "龱伈󰠇",
+              "diamond": 54137,
+              "max_gift": "人气票",
+              "max_gift_diamond": 446
+            },
+            {
+              "name": "木鱼～独行者",
+              "diamond": 51268,
+              "max_gift": "人气票",
+              "max_gift_diamond": 526
+            },
+            {
+              "name": "Flo・花",
+              "diamond": 42880,
+              "max_gift": "人气票",
+              "max_gift_diamond": 520
+            },
+            {
+              "name": "小强",
+              "diamond": 24389,
+              "max_gift": "人气票",
+              "max_gift_diamond": 1000
+            }
+          ],
+          "total_diamond": 858479
+        },
+        "like": {
+          "top_users": [
+            {
+              "name": "我思故我在",
+              "count": 2676
+            },
+            {
+              "name": "陈豆豆",
+              "count": 2588
+            },
+            {
+              "name": "奶油田田圈",
+              "count": 2091
+            },
+            {
+              "name": "一大坨",
+              "count": 1797
+            },
+            {
+              "name": "总在冬季相遇",
+              "count": 1782
+            },
+            {
+              "name": "心颖",
+              "count": 1757
+            }
+          ],
+          "total_likes": 90092
+        }
+      },
+      "gift_diamond": 858479,
+      "total_pv": 466000
     }
   ],
   "anchor_name": "张君雅1v4⁸⁰⁰⁸",
