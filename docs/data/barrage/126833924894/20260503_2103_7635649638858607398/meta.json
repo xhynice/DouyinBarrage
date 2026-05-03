@@ -1,0 +1,149 @@
+{
+  "session_id": "20260503_2103_7635649638858607398",
+  "live_id": "126833924894",
+  "available_types": [
+    "chat",
+    "control",
+    "gift",
+    "like",
+    "social",
+    "stats"
+  ],
+  "stats": {
+    "chat": 7020,
+    "control": 1,
+    "gift": 6331,
+    "like": 4252,
+    "social": 649,
+    "stats": 2357
+  },
+  "total": 20610,
+  "rankings": {
+    "chat": {
+      "top_users": [
+        {
+          "name": "抖音小肋手",
+          "count": 121
+        },
+        {
+          "name": "洛皮皮🐻‍❄️⁰⁵⁰³",
+          "count": 112
+        },
+        {
+          "name": "ら孤痞",
+          "count": 54
+        },
+        {
+          "name": "钟灵毓秀",
+          "count": 52
+        },
+        {
+          "name": "老哥",
+          "count": 48
+        },
+        {
+          "name": "༄᭄冰封ꦿᩚ࿐",
+          "count": 36
+        }
+      ],
+      "top_at": [
+        {
+          "name": "ら孤痞",
+          "count": 45
+        },
+        {
+          "name": "野生小厨",
+          "count": 13
+        },
+        {
+          "name": "洛皮皮🐻‍❄️⁰⁵⁰³",
+          "count": 13
+        },
+        {
+          "name": "启  夏",
+          "count": 12
+        },
+        {
+          "name": "自＾渡",
+          "count": 12
+        },
+        {
+          "name": "抖音小肋手",
+          "count": 11
+        }
+      ]
+    },
+    "gift": {
+      "top_users": [
+        {
+          "name": "@余尚勇",
+          "diamond": 13176,
+          "max_gift": "一束花开",
+          "max_gift_diamond": 2928
+        },
+        {
+          "name": "Kun°",
+          "diamond": 8976,
+          "max_gift": "一眼心动",
+          "max_gift_diamond": 5200
+        },
+        {
+          "name": "萌妹吖",
+          "diamond": 6419,
+          "max_gift": "真的爱你",
+          "max_gift_diamond": 2080
+        },
+        {
+          "name": "三毛",
+          "diamond": 5843,
+          "max_gift": "头号神枪手",
+          "max_gift_diamond": 891
+        },
+        {
+          "name": "Luka",
+          "diamond": 3415,
+          "max_gift": "人气票",
+          "max_gift_diamond": 81
+        },
+        {
+          "name": "沉住气",
+          "diamond": 2644,
+          "max_gift": "小心心",
+          "max_gift_diamond": 99
+        }
+      ],
+      "total_diamond": 65406
+    },
+    "like": {
+      "top_users": [
+        {
+          "name": "用户3578",
+          "count": 3060
+        },
+        {
+          "name": "K I",
+          "count": 2388
+        },
+        {
+          "name": "抖音小肋手",
+          "count": 1938
+        },
+        {
+          "name": "椰子🥥",
+          "count": 1833
+        },
+        {
+          "name": "昕愿",
+          "count": 1698
+        },
+        {
+          "name": "不经意亲你一口",
+          "count": 1657
+        }
+      ],
+      "total_likes": 85430
+    }
+  },
+  "gift_diamond": 65406,
+  "total_pv": 279000
+}
