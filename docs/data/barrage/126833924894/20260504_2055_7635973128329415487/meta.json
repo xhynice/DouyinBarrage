@@ -88,12 +88,6 @@
           "max_gift_diamond": 9
         },
         {
-          "name": "暮羊人",
-          "diamond": 23,
-          "max_gift": "人气票",
-          "max_gift_diamond": 7
-        },
-        {
           "name": "太极老朋友∞姜真仁☯️",
           "diamond": 19,
           "max_gift": "点亮粉丝团",
@@ -106,13 +100,19 @@
           "max_gift_diamond": 9
         },
         {
-          "name": "不吃宵夜",
-          "diamond": 9,
-          "max_gift": "人气票",
-          "max_gift_diamond": 3
+          "name": "接待员 妮妮",
+          "diamond": 8,
+          "max_gift": "你最好看",
+          "max_gift_diamond": 2
+        },
+        {
+          "name": "水晶",
+          "diamond": 8,
+          "max_gift": "你最好看",
+          "max_gift_diamond": 2
         }
       ],
-      "total_diamond": 579
+      "total_diamond": 550
     },
     "like": {
       "top_users": [
@@ -144,6 +144,6 @@
       "total_likes": 3994
     }
   },
-  "gift_diamond": 579,
+  "gift_diamond": 552,
   "total_pv": 343000
 }

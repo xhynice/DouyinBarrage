@@ -106,13 +106,13 @@
           "max_gift_diamond": 520
         },
         {
-          "name": "老吴来6你咯",
-          "diamond": 827,
-          "max_gift": "人气票",
-          "max_gift_diamond": 46
+          "name": "《有成》",
+          "diamond": 810,
+          "max_gift": "为你闪耀",
+          "max_gift_diamond": 108
         }
       ],
-      "total_diamond": 35371
+      "total_diamond": 34461
     },
     "like": {
       "top_users": [
@@ -144,6 +144,6 @@
       "total_likes": 83100
     }
   },
-  "gift_diamond": 35371,
+  "gift_diamond": 34528,
   "total_pv": 240000
 }

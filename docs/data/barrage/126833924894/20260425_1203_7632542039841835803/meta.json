@@ -112,7 +112,7 @@
           "max_gift_diamond": 1999
         }
       ],
-      "total_diamond": 62721
+      "total_diamond": 62099
     },
     "like": {
       "top_users": [
@@ -144,6 +144,6 @@
       "total_likes": 93775
     }
   },
-  "gift_diamond": 62721,
+  "gift_diamond": 62160,
   "total_pv": 327000
 }

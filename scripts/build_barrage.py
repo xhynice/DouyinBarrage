@@ -286,9 +286,21 @@ class BarrageBuilder:
         return items
 
     def compute_gift_diamond(self, session_dir):
-        """计算礼物总抖币。"""
+        """计算礼物总抖币。人气票取每个用户最大值，其他礼物累加。"""
         items = self.read_jsonl(os.path.join(session_dir, 'gift.jsonl'))
-        return sum(int(item.get('diamond_total', 0)) for item in items)
+        user_renqi = defaultdict(int)
+        total = 0
+        for item in items:
+            gift_name = item.get('gift_name', '')
+            d = int(item.get('diamond_total', 0))
+            user_id = item.get('user_id', '')
+            if gift_name == '人气票':
+                if d > user_renqi[user_id]:
+                    user_renqi[user_id] = d
+            else:
+                total += d
+        total += sum(user_renqi.values())
+        return total
 
     def compute_total_pv(self, session_dir):
         """从 stats.jsonl 获取总观看。"""
@@ -334,26 +346,30 @@ class BarrageBuilder:
         if 'gift' in available_types:
             items = self.read_jsonl(os.path.join(session_dir, 'gift.jsonl'))
             if items:
-                user_diamond = defaultdict(int)
-                user_max_gift = {}
+                user_gift_data = defaultdict(lambda: {'diamond': 0, 'max_gift': None})
                 for item in items:
                     name = item.get('user_name', '')
+                    gift_name = item.get('gift_name', '')
                     d = int(item.get('diamond_total', 0))
-                    user_diamond[name] += d
-                    if name not in user_max_gift or d > int(user_max_gift[name].get('diamond_total', 0)):
-                        user_max_gift[name] = item
-                top_gift = sorted(user_diamond.items(), key=lambda x: x[1], reverse=True)[:6]
+                    if gift_name == '人气票':
+                        if d > user_gift_data[name]['diamond']:
+                            user_gift_data[name]['diamond'] = d
+                    else:
+                        user_gift_data[name]['diamond'] += d
+                    if user_gift_data[name]['max_gift'] is None or d > int(user_gift_data[name]['max_gift'].get('diamond_total', 0)):
+                        user_gift_data[name]['max_gift'] = item
+                top_gift = sorted(user_gift_data.items(), key=lambda x: x[1]['diamond'], reverse=True)[:6]
                 top_users = []
-                for n, d in top_gift:
-                    entry = {'name': n, 'diamond': d}
-                    if n in user_max_gift:
-                        mg = user_max_gift[n]
+                for n, data in top_gift:
+                    entry = {'name': n, 'diamond': data['diamond']}
+                    if data['max_gift']:
+                        mg = data['max_gift']
                         entry['max_gift'] = mg.get('gift_name', '')
                         entry['max_gift_diamond'] = int(mg.get('diamond_total', 0))
                     top_users.append(entry)
                 rankings['gift'] = {
                     'top_users': top_users,
-                    'total_diamond': sum(user_diamond.values())
+                    'total_diamond': sum(d['diamond'] for d in user_gift_data.values())
                 }
 
         if 'like' in available_types:

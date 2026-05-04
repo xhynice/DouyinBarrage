@@ -78,43 +78,43 @@
     "gift": {
       "top_users": [
         {
-          "name": "王某人（  ）⁵¹⁰⁷⁴",
-          "diamond": 124937,
-          "max_gift": "人气票",
-          "max_gift_diamond": 520
+          "name": "张君雅的啤酒瓶",
+          "diamond": 2991,
+          "max_gift": "跑车",
+          "max_gift_diamond": 1200
         },
         {
-          "name": "遗忘的回忆",
-          "diamond": 70697,
-          "max_gift": "人气票",
-          "max_gift_diamond": 527
+          "name": "记住",
+          "diamond": 1877,
+          "max_gift": "Thuglife",
+          "max_gift_diamond": 396
         },
         {
-          "name": "龱伈󰠇",
-          "diamond": 54137,
-          "max_gift": "人气票",
-          "max_gift_diamond": 446
+          "name": "久久💞ــــﮩﮩ٨",
+          "diamond": 1418,
+          "max_gift": "跑车",
+          "max_gift_diamond": 1200
         },
         {
-          "name": "木鱼～独行者",
-          "diamond": 51268,
-          "max_gift": "人气票",
-          "max_gift_diamond": 526
-        },
-        {
-          "name": "Flo・花",
-          "diamond": 42880,
-          "max_gift": "人气票",
-          "max_gift_diamond": 520
+          "name": "别留我孤身一人",
+          "diamond": 1001,
+          "max_gift": "为你打Call",
+          "max_gift_diamond": 999
         },
         {
           "name": "小强",
-          "diamond": 24389,
+          "diamond": 1000,
           "max_gift": "人气票",
           "max_gift_diamond": 1000
+        },
+        {
+          "name": "@？～￥￥￥￥ycfx",
+          "diamond": 704,
+          "max_gift": "钞票枪",
+          "max_gift_diamond": 699
         }
       ],
-      "total_diamond": 858479
+      "total_diamond": 76288
     },
     "like": {
       "top_users": [
@@ -174,6 +174,6 @@
       ]
     }
   },
-  "gift_diamond": 858479,
+  "gift_diamond": 79835,
   "total_pv": 466000
 }

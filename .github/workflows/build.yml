@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       live_id:
-        description: '直播间ID (留空则使用config.yaml第一个)'
+        description: '直播间ID (留空则使用rooms.txt第一个)'
         required: false
         default: ''
 
@@ -45,18 +45,20 @@ jobs:
           echo "未配置 COOKIE_TXT secret，将以游客身份采集"
         fi
 
-    - name: Get first live_id from config
+    - name: Get first live_id from rooms.txt
       id: get-live-id
       run: |
         python -c "
-        import yaml
-        with open('config.yaml', 'r', encoding='utf-8') as f:
-            cfg = yaml.safe_load(f)
-        rooms = cfg.get('rooms', [])
-        if rooms:
-            print('live_id=' + rooms[0]['id'])
-        else:
-            print('live_id=')
+        import os
+        if os.path.exists('rooms.txt'):
+            with open('rooms.txt', 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        parts = line.split(',')
+                        if parts:
+                            print('live_id=' + parts[0].strip())
+                            break
         " >> $GITHUB_OUTPUT
 
     - name: Run barrage collector

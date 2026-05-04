@@ -108,13 +108,13 @@
           "max_gift_diamond": 198
         },
         {
-          "name": "🍃愿",
-          "diamond": 2312,
-          "max_gift": "人气票",
-          "max_gift_diamond": 86
+          "name": "ら孤痞",
+          "diamond": 1100,
+          "max_gift": "为你加冕",
+          "max_gift_diamond": 1000
         }
       ],
-      "total_diamond": 157790
+      "total_diamond": 155263
     },
     "like": {
       "top_users": [
@@ -174,6 +174,6 @@
       ]
     }
   },
-  "gift_diamond": 157790,
+  "gift_diamond": 155404,
   "total_pv": 285000
 }

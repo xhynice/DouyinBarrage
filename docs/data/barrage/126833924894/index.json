@@ -115,7 +115,7 @@
               "max_gift_diamond": 90
             }
           ],
-          "total_diamond": 23851
+          "total_diamond": 23715
         },
         "like": {
           "top_users": [
@@ -147,7 +147,7 @@
           "total_likes": 88227
         }
       },
-      "gift_diamond": 23851,
+      "gift_diamond": 23734,
       "total_pv": 330000
     },
     {
@@ -258,13 +258,13 @@
               "max_gift_diamond": 520
             },
             {
-              "name": "老吴来6你咯",
-              "diamond": 827,
-              "max_gift": "人气票",
-              "max_gift_diamond": 46
+              "name": "《有成》",
+              "diamond": 810,
+              "max_gift": "为你闪耀",
+              "max_gift_diamond": 108
             }
           ],
-          "total_diamond": 35371
+          "total_diamond": 34461
         },
         "like": {
           "top_users": [
@@ -296,7 +296,7 @@
           "total_likes": 83100
         }
       },
-      "gift_diamond": 35371,
+      "gift_diamond": 34528,
       "total_pv": 240000
     },
     {
@@ -413,7 +413,7 @@
               "max_gift_diamond": 1999
             }
           ],
-          "total_diamond": 62721
+          "total_diamond": 62099
         },
         "like": {
           "top_users": [
@@ -445,7 +445,7 @@
           "total_likes": 93775
         }
       },
-      "gift_diamond": 62721,
+      "gift_diamond": 62160,
       "total_pv": 327000
     },
     {
@@ -564,7 +564,7 @@
               "max_gift_diamond": 1200
             }
           ],
-          "total_diamond": 39052
+          "total_diamond": 38766
         },
         "like": {
           "top_users": [
@@ -624,7 +624,7 @@
           ]
         }
       },
-      "gift_diamond": 39052,
+      "gift_diamond": 38810,
       "total_pv": 274000
     },
     {
@@ -737,13 +737,13 @@
               "max_gift_diamond": 198
             },
             {
-              "name": "🍃愿",
-              "diamond": 2312,
-              "max_gift": "人气票",
-              "max_gift_diamond": 86
+              "name": "ら孤痞",
+              "diamond": 1100,
+              "max_gift": "为你加冕",
+              "max_gift_diamond": 1000
             }
           ],
-          "total_diamond": 157790
+          "total_diamond": 155263
         },
         "like": {
           "top_users": [
@@ -803,7 +803,7 @@
           ]
         }
       },
-      "gift_diamond": 157790,
+      "gift_diamond": 155404,
       "total_pv": 285000
     },
     {
@@ -922,7 +922,7 @@
               "max_gift_diamond": 1000
             }
           ],
-          "total_diamond": 50766
+          "total_diamond": 50412
         },
         "like": {
           "top_users": [
@@ -982,7 +982,7 @@
           ]
         }
       },
-      "gift_diamond": 50766,
+      "gift_diamond": 50456,
       "total_pv": 268000
     },
     {
@@ -1101,7 +1101,7 @@
               "max_gift_diamond": 1200
             }
           ],
-          "total_diamond": 76083
+          "total_diamond": 75458
         },
         "like": {
           "top_users": [
@@ -1161,7 +1161,7 @@
           ]
         }
       },
-      "gift_diamond": 76083,
+      "gift_diamond": 75537,
       "total_pv": 256000
     },
     {
@@ -1280,7 +1280,7 @@
               "max_gift_diamond": 1194
             }
           ],
-          "total_diamond": 264949
+          "total_diamond": 263733
         },
         "like": {
           "top_users": [
@@ -1340,7 +1340,7 @@
           ]
         }
       },
-      "gift_diamond": 264949,
+      "gift_diamond": 263837,
       "total_pv": 339000
     },
     {
@@ -1423,43 +1423,43 @@
         "gift": {
           "top_users": [
             {
-              "name": "王某人（  ）⁵¹⁰⁷⁴",
-              "diamond": 124937,
-              "max_gift": "人气票",
-              "max_gift_diamond": 520
+              "name": "张君雅的啤酒瓶",
+              "diamond": 2991,
+              "max_gift": "跑车",
+              "max_gift_diamond": 1200
             },
             {
-              "name": "遗忘的回忆",
-              "diamond": 70697,
-              "max_gift": "人气票",
-              "max_gift_diamond": 527
+              "name": "记住",
+              "diamond": 1877,
+              "max_gift": "Thuglife",
+              "max_gift_diamond": 396
             },
             {
-              "name": "龱伈󰠇",
-              "diamond": 54137,
-              "max_gift": "人气票",
-              "max_gift_diamond": 446
+              "name": "久久💞ــــﮩﮩ٨",
+              "diamond": 1418,
+              "max_gift": "跑车",
+              "max_gift_diamond": 1200
             },
             {
-              "name": "木鱼～独行者",
-              "diamond": 51268,
-              "max_gift": "人气票",
-              "max_gift_diamond": 526
-            },
-            {
-              "name": "Flo・花",
-              "diamond": 42880,
-              "max_gift": "人气票",
-              "max_gift_diamond": 520
+              "name": "别留我孤身一人",
+              "diamond": 1001,
+              "max_gift": "为你打Call",
+              "max_gift_diamond": 999
             },
             {
               "name": "小强",
-              "diamond": 24389,
+              "diamond": 1000,
               "max_gift": "人气票",
               "max_gift_diamond": 1000
+            },
+            {
+              "name": "@？～￥￥￥￥ycfx",
+              "diamond": 704,
+              "max_gift": "钞票枪",
+              "max_gift_diamond": 699
             }
           ],
-          "total_diamond": 858479
+          "total_diamond": 76288
         },
         "like": {
           "top_users": [
@@ -1519,7 +1519,7 @@
           ]
         }
       },
-      "gift_diamond": 858479,
+      "gift_diamond": 79835,
       "total_pv": 466000
     },
     {
@@ -1626,19 +1626,19 @@
               "max_gift_diamond": 891
             },
             {
-              "name": "Luka",
-              "diamond": 3415,
-              "max_gift": "人气票",
-              "max_gift_diamond": 81
-            },
-            {
               "name": "沉住气",
               "diamond": 2644,
               "max_gift": "小心心",
               "max_gift_diamond": 99
+            },
+            {
+              "name": "张君雅的啤酒瓶",
+              "diamond": 1807,
+              "max_gift": "为你举牌",
+              "max_gift_diamond": 597
             }
           ],
-          "total_diamond": 65406
+          "total_diamond": 59888
         },
         "like": {
           "top_users": [
@@ -1698,7 +1698,7 @@
           ]
         }
       },
-      "gift_diamond": 65406,
+      "gift_diamond": 60018,
       "total_pv": 279000
     },
     {
@@ -1815,7 +1815,7 @@
               "max_gift_diamond": 1040
             }
           ],
-          "total_diamond": 37306
+          "total_diamond": 36262
         },
         "like": {
           "top_users": [
@@ -1847,7 +1847,7 @@
           "total_likes": 73992
         }
       },
-      "gift_diamond": 37306,
+      "gift_diamond": 36330,
       "total_pv": 385000
     },
     {
@@ -1940,12 +1940,6 @@
               "max_gift_diamond": 9
             },
             {
-              "name": "暮羊人",
-              "diamond": 23,
-              "max_gift": "人气票",
-              "max_gift_diamond": 7
-            },
-            {
               "name": "太极老朋友∞姜真仁☯️",
               "diamond": 19,
               "max_gift": "点亮粉丝团",
@@ -1958,13 +1952,19 @@
               "max_gift_diamond": 9
             },
             {
-              "name": "不吃宵夜",
-              "diamond": 9,
-              "max_gift": "人气票",
-              "max_gift_diamond": 3
+              "name": "接待员 妮妮",
+              "diamond": 8,
+              "max_gift": "你最好看",
+              "max_gift_diamond": 2
+            },
+            {
+              "name": "水晶",
+              "diamond": 8,
+              "max_gift": "你最好看",
+              "max_gift_diamond": 2
             }
           ],
-          "total_diamond": 579
+          "total_diamond": 550
         },
         "like": {
           "top_users": [
@@ -1996,7 +1996,7 @@
           "total_likes": 3994
         }
       },
-      "gift_diamond": 579,
+      "gift_diamond": 552,
       "total_pv": 343000
     }
   ],

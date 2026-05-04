@@ -102,19 +102,19 @@
           "max_gift_diamond": 891
         },
         {
-          "name": "Luka",
-          "diamond": 3415,
-          "max_gift": "人气票",
-          "max_gift_diamond": 81
-        },
-        {
           "name": "沉住气",
           "diamond": 2644,
           "max_gift": "小心心",
           "max_gift_diamond": 99
+        },
+        {
+          "name": "张君雅的啤酒瓶",
+          "diamond": 1807,
+          "max_gift": "为你举牌",
+          "max_gift_diamond": 597
         }
       ],
-      "total_diamond": 65406
+      "total_diamond": 59888
     },
     "like": {
       "top_users": [
@@ -174,6 +174,6 @@
       ]
     }
   },
-  "gift_diamond": 65406,
+  "gift_diamond": 60018,
   "total_pv": 279000
 }
