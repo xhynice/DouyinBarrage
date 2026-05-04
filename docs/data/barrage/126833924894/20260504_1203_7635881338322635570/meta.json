@@ -1,0 +1,149 @@
+{
+  "session_id": "20260504_1203_7635881338322635570",
+  "live_id": "126833924894",
+  "available_types": [
+    "chat",
+    "control",
+    "gift",
+    "like",
+    "social",
+    "stats"
+  ],
+  "stats": {
+    "chat": 7518,
+    "control": 1,
+    "gift": 6703,
+    "like": 3645,
+    "social": 680,
+    "stats": 1974
+  },
+  "total": 20521,
+  "rankings": {
+    "chat": {
+      "top_users": [
+        {
+          "name": "抖音小肋手",
+          "count": 104
+        },
+        {
+          "name": "忙里偷闲⁵¹⁰⁷⁴",
+          "count": 72
+        },
+        {
+          "name": "killer",
+          "count": 56
+        },
+        {
+          "name": "ら孤痞",
+          "count": 44
+        },
+        {
+          "name": "九月是只喵",
+          "count": 42
+        },
+        {
+          "name": "一个从人民中走出来的普通人（修了心养性版",
+          "count": 38
+        }
+      ],
+      "top_at": [
+        {
+          "name": "ら孤痞",
+          "count": 31
+        },
+        {
+          "name": "九月是只喵",
+          "count": 26
+        },
+        {
+          "name": "知遇👣",
+          "count": 16
+        },
+        {
+          "name": "野生小厨",
+          "count": 16
+        },
+        {
+          "name": "TeFuir",
+          "count": 16
+        },
+        {
+          "name": "小笨蛋",
+          "count": 15
+        }
+      ]
+    },
+    "gift": {
+      "top_users": [
+        {
+          "name": "萌妹吖",
+          "diamond": 3019,
+          "max_gift": "星光庄园",
+          "max_gift_diamond": 3000
+        },
+        {
+          "name": "ら孤痞",
+          "diamond": 2076,
+          "max_gift": "星光闪耀",
+          "max_gift_diamond": 279
+        },
+        {
+          "name": "张君雅的啤酒瓶",
+          "diamond": 1966,
+          "max_gift": "跑车",
+          "max_gift_diamond": 1200
+        },
+        {
+          "name": "妉",
+          "diamond": 1914,
+          "max_gift": "为你闪耀",
+          "max_gift_diamond": 180
+        },
+        {
+          "name": "也甜",
+          "diamond": 1702,
+          "max_gift": "为你闪耀",
+          "max_gift_diamond": 279
+        },
+        {
+          "name": "多年以后🏂",
+          "diamond": 1579,
+          "max_gift": "真的爱你",
+          "max_gift_diamond": 1040
+        }
+      ],
+      "total_diamond": 37306
+    },
+    "like": {
+      "top_users": [
+        {
+          "name": "天空无云",
+          "count": 2703
+        },
+        {
+          "name": "抖音小肋手",
+          "count": 2163
+        },
+        {
+          "name": "不经意亲你一口",
+          "count": 2112
+        },
+        {
+          "name": "妉",
+          "count": 2102
+        },
+        {
+          "name": "LLLch",
+          "count": 1914
+        },
+        {
+          "name": "苦菊",
+          "count": 1892
+        }
+      ],
+      "total_likes": 73992
+    }
+  },
+  "gift_diamond": 37306,
+  "total_pv": 385000
+}
