@@ -1,0 +1,149 @@
+{
+  "session_id": "20260504_2055_7635973128329415487",
+  "live_id": "126833924894",
+  "available_types": [
+    "chat",
+    "control",
+    "gift",
+    "like",
+    "social",
+    "stats"
+  ],
+  "stats": {
+    "chat": 3374,
+    "control": 1,
+    "gift": 283,
+    "like": 201,
+    "social": 107,
+    "stats": 126
+  },
+  "total": 4092,
+  "rankings": {
+    "chat": {
+      "top_users": [
+        {
+          "name": "迷茫",
+          "count": 44
+        },
+        {
+          "name": "小神龙",
+          "count": 41
+        },
+        {
+          "name": "莓啤汽𖠚 ˎˊ-",
+          "count": 40
+        },
+        {
+          "name": "威猛的男人",
+          "count": 35
+        },
+        {
+          "name": "安安",
+          "count": 28
+        },
+        {
+          "name": "楠悦:)",
+          "count": 28
+        }
+      ],
+      "top_at": [
+        {
+          "name": "小可爱胖丁",
+          "count": 3
+        },
+        {
+          "name": "问心",
+          "count": 3
+        },
+        {
+          "name": "꧁番茄《不》炒蛋꧂",
+          "count": 2
+        },
+        {
+          "name": "Nov.",
+          "count": 1
+        },
+        {
+          "name": "ㅤ ㅤㅤㅤ ㅤ",
+          "count": 1
+        },
+        {
+          "name": "喜丸",
+          "count": 1
+        }
+      ]
+    },
+    "gift": {
+      "top_users": [
+        {
+          "name": "苏先生",
+          "diamond": 202,
+          "max_gift": "暖阳Thuglife",
+          "max_gift_diamond": 99
+        },
+        {
+          "name": "幼稚鬼二岁",
+          "diamond": 39,
+          "max_gift": "为你闪耀",
+          "max_gift_diamond": 9
+        },
+        {
+          "name": "暮羊人",
+          "diamond": 23,
+          "max_gift": "人气票",
+          "max_gift_diamond": 7
+        },
+        {
+          "name": "太极老朋友∞姜真仁☯️",
+          "diamond": 19,
+          "max_gift": "点亮粉丝团",
+          "max_gift_diamond": 9
+        },
+        {
+          "name": "东家有彩",
+          "diamond": 18,
+          "max_gift": "为你闪耀",
+          "max_gift_diamond": 9
+        },
+        {
+          "name": "不吃宵夜",
+          "diamond": 9,
+          "max_gift": "人气票",
+          "max_gift_diamond": 3
+        }
+      ],
+      "total_diamond": 579
+    },
+    "like": {
+      "top_users": [
+        {
+          "name": "小刘妹妹呀",
+          "count": 445
+        },
+        {
+          "name": "äkbår",
+          "count": 261
+        },
+        {
+          "name": "昕愿",
+          "count": 234
+        },
+        {
+          "name": "路人甲",
+          "count": 234
+        },
+        {
+          "name": "龱伈󰠇",
+          "count": 183
+        },
+        {
+          "name": "脆脆鲨🍍",
+          "count": 156
+        }
+      ],
+      "total_likes": 3994
+    }
+  },
+  "gift_diamond": 579,
+  "total_pv": 343000
+}
