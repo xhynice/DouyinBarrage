@@ -6,6 +6,7 @@
     "control",
     "gift",
     "like",
+    "lucky_bag",
     "social",
     "stats"
   ],
@@ -14,10 +15,11 @@
     "control": 1,
     "gift": 10576,
     "like": 4895,
+    "lucky_bag": 1721,
     "social": 602,
     "stats": 2635
   },
-  "total": 28552,
+  "total": 30273,
   "rankings": {
     "chat": {
       "top_users": [
@@ -142,6 +144,34 @@
         }
       ],
       "total_likes": 98522
+    },
+    "lucky_bag": {
+      "top_users": [
+        {
+          "name": "💭",
+          "count": 2
+        },
+        {
+          "name": "等待",
+          "count": 2
+        },
+        {
+          "name": "。。。",
+          "count": 2
+        },
+        {
+          "name": "7",
+          "count": 2
+        },
+        {
+          "name": "Jiajiabin",
+          "count": 2
+        },
+        {
+          "name": "雨",
+          "count": 2
+        }
+      ]
     }
   },
   "gift_diamond": 76083,

@@ -22,7 +22,7 @@ from base.messages import (
     RoomMessage, RoomRankMessage, RoomStreamAdaptationMessage,
 )
 from base.utils import (
-    get_user_id, fmt_grade, fmt_fans_club, safe_time,
+    get_user_id, fmt_grade, fmt_fans_club,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ def parse_chat_msg(payload, enable_outputs=None):
     user = msg.user
     uid = get_user_id(user)
     common = {
-        'time': safe_time(msg.common.create_time if msg.common else 0) or time.strftime('%H:%M:%S'),
+        'time': time.strftime('%H:%M:%S'),
         'user_id': uid, 'user_name': user.nick_name,
         'grade': fmt_grade(user), 'fans_club': fmt_fans_club(user),
     }

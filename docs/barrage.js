@@ -430,7 +430,7 @@ const BarrageApp = (function() {
             const title = data.room_title ? ` | ${data.room_title}` : '';
 
             updateHeader(`${displayName} - 弹幕记录`, displayName, avatarUrl);
-            document.getElementById('subtitle').textContent = `直播间: ${liveId}${title}`;
+            document.getElementById('subtitle').textContent = `${liveId}${title}`;
 
             document.getElementById('search-box').classList.remove('hidden');
             showLoading(false);
@@ -555,7 +555,9 @@ const BarrageApp = (function() {
     function renderDatetimeList(sessions) {
         const container = document.getElementById('datetime-options');
 
-        container.innerHTML = sessions.map(session => {
+        const sorted = [...sessions].sort((a, b) => (b.session_id || '').localeCompare(a.session_id || ''));
+
+        container.innerHTML = sorted.map(session => {
             const parsed = parseSessionId(session.session_id);
             const label = parsed ? `${parsed.dateLabel} ${parsed.timeLabel}` : session.session_id;
             return `
@@ -1045,7 +1047,7 @@ const BarrageApp = (function() {
 
     function closeAllCustomSelects() {
         document.querySelectorAll('.custom-select').forEach(select => {
-            select.classList.remove('open');
+            select.classList.remove('open', 'options-right');
         });
     }
 
@@ -1059,6 +1061,9 @@ const BarrageApp = (function() {
                 const isOpen = select.classList.contains('open');
                 closeAllCustomSelects();
                 if (!isOpen) {
+                    const rect = trigger.getBoundingClientRect();
+                    const isRightSide = rect.right > window.innerWidth - 200;
+                    select.classList.toggle('options-right', isRightSide);
                     select.classList.add('open');
                 }
             });

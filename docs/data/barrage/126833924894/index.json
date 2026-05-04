@@ -456,6 +456,7 @@
         "control",
         "gift",
         "like",
+        "lucky_bag",
         "social",
         "stats"
       ],
@@ -464,10 +465,11 @@
         "control": 1,
         "gift": 7077,
         "like": 4063,
+        "lucky_bag": 435,
         "social": 605,
         "stats": 2745
       },
-      "total": 22027,
+      "total": 22462,
       "rankings": {
         "chat": {
           "top_users": [
@@ -592,6 +594,34 @@
             }
           ],
           "total_likes": 88278
+        },
+        "lucky_bag": {
+          "top_users": [
+            {
+              "name": "舁",
+              "count": 2
+            },
+            {
+              "name": "捕捉小金鱼",
+              "count": 2
+            },
+            {
+              "name": "᭄一介🎋俗人ღᩚ᭄",
+              "count": 2
+            },
+            {
+              "name": "执子之手",
+              "count": 2
+            },
+            {
+              "name": "汐希",
+              "count": 2
+            },
+            {
+              "name": "🌸一朵小花",
+              "count": 2
+            }
+          ]
         }
       },
       "gift_diamond": 39052,
@@ -605,6 +635,7 @@
         "control",
         "gift",
         "like",
+        "lucky_bag",
         "social",
         "stats"
       ],
@@ -613,10 +644,11 @@
         "control": 1,
         "gift": 9379,
         "like": 4008,
+        "lucky_bag": 229,
         "social": 739,
         "stats": 2432
       },
-      "total": 26696,
+      "total": 26925,
       "rankings": {
         "chat": {
           "top_users": [
@@ -741,6 +773,34 @@
             }
           ],
           "total_likes": 88315
+        },
+        "lucky_bag": {
+          "top_users": [
+            {
+              "name": "小小",
+              "count": 1
+            },
+            {
+              "name": "王德发🧚🏻‍♀️",
+              "count": 1
+            },
+            {
+              "name": "一路生花",
+              "count": 1
+            },
+            {
+              "name": "钱途 似海",
+              "count": 1
+            },
+            {
+              "name": "旁♡̶҉观者",
+              "count": 1
+            },
+            {
+              "name": "𓏸 𓂂 𓈒 🐟",
+              "count": 1
+            }
+          ]
         }
       },
       "gift_diamond": 157790,
@@ -754,6 +814,7 @@
         "control",
         "gift",
         "like",
+        "lucky_bag",
         "social",
         "stats"
       ],
@@ -762,10 +823,11 @@
         "control": 1,
         "gift": 9615,
         "like": 4369,
+        "lucky_bag": 1744,
         "social": 770,
         "stats": 2446
       },
-      "total": 25829,
+      "total": 27573,
       "rankings": {
         "chat": {
           "top_users": [
@@ -890,6 +952,34 @@
             }
           ],
           "total_likes": 92416
+        },
+        "lucky_bag": {
+          "top_users": [
+            {
+              "name": "。",
+              "count": 3
+            },
+            {
+              "name": "卡布奇诺",
+              "count": 2
+            },
+            {
+              "name": "问心",
+              "count": 2
+            },
+            {
+              "name": "蜗牛",
+              "count": 2
+            },
+            {
+              "name": "空白",
+              "count": 2
+            },
+            {
+              "name": "阿军",
+              "count": 2
+            }
+          ]
         }
       },
       "gift_diamond": 50766,
@@ -903,6 +993,7 @@
         "control",
         "gift",
         "like",
+        "lucky_bag",
         "social",
         "stats"
       ],
@@ -911,10 +1002,11 @@
         "control": 1,
         "gift": 10576,
         "like": 4895,
+        "lucky_bag": 1721,
         "social": 602,
         "stats": 2635
       },
-      "total": 28552,
+      "total": 30273,
       "rankings": {
         "chat": {
           "top_users": [
@@ -1039,6 +1131,34 @@
             }
           ],
           "total_likes": 98522
+        },
+        "lucky_bag": {
+          "top_users": [
+            {
+              "name": "💭",
+              "count": 2
+            },
+            {
+              "name": "等待",
+              "count": 2
+            },
+            {
+              "name": "。。。",
+              "count": 2
+            },
+            {
+              "name": "7",
+              "count": 2
+            },
+            {
+              "name": "Jiajiabin",
+              "count": 2
+            },
+            {
+              "name": "雨",
+              "count": 2
+            }
+          ]
         }
       },
       "gift_diamond": 76083,
@@ -1052,6 +1172,7 @@
         "control",
         "gift",
         "like",
+        "lucky_bag",
         "social",
         "stats"
       ],
@@ -1060,10 +1181,11 @@
         "control": 1,
         "gift": 11210,
         "like": 5250,
+        "lucky_bag": 3608,
         "social": 788,
         "stats": 3340
       },
-      "total": 30944,
+      "total": 34552,
       "rankings": {
         "chat": {
           "top_users": [
@@ -1188,6 +1310,34 @@
             }
           ],
           "total_likes": 112272
+        },
+        "lucky_bag": {
+          "top_users": [
+            {
+              "name": "Lemon",
+              "count": 3
+            },
+            {
+              "name": "欭惗",
+              "count": 3
+            },
+            {
+              "name": "开心",
+              "count": 3
+            },
+            {
+              "name": "Money",
+              "count": 3
+            },
+            {
+              "name": "..",
+              "count": 3
+            },
+            {
+              "name": "祥",
+              "count": 3
+            }
+          ]
         }
       },
       "gift_diamond": 264949,
@@ -1201,6 +1351,7 @@
         "control",
         "gift",
         "like",
+        "lucky_bag",
         "social",
         "stats"
       ],
@@ -1209,10 +1360,11 @@
         "control": 1,
         "gift": 42893,
         "like": 4437,
+        "lucky_bag": 8563,
         "social": 921,
         "stats": 3000
       },
-      "total": 61214,
+      "total": 69777,
       "rankings": {
         "chat": {
           "top_users": [
@@ -1337,6 +1489,34 @@
             }
           ],
           "total_likes": 90092
+        },
+        "lucky_bag": {
+          "top_users": [
+            {
+              "name": "唯一",
+              "count": 7
+            },
+            {
+              "name": "六月",
+              "count": 6
+            },
+            {
+              "name": "㣻罖",
+              "count": 6
+            },
+            {
+              "name": "欭惗",
+              "count": 6
+            },
+            {
+              "name": "温素六时",
+              "count": 5
+            },
+            {
+              "name": "陌路",
+              "count": 5
+            }
+          ]
         }
       },
       "gift_diamond": 858479,
@@ -1350,6 +1530,7 @@
         "control",
         "gift",
         "like",
+        "lucky_bag",
         "social",
         "stats"
       ],
@@ -1358,10 +1539,11 @@
         "control": 1,
         "gift": 6331,
         "like": 4252,
+        "lucky_bag": 1747,
         "social": 649,
         "stats": 2357
       },
-      "total": 20610,
+      "total": 22357,
       "rankings": {
         "chat": {
           "top_users": [
@@ -1486,6 +1668,34 @@
             }
           ],
           "total_likes": 85430
+        },
+        "lucky_bag": {
+          "top_users": [
+            {
+              "name": "伟",
+              "count": 3
+            },
+            {
+              "name": "小c",
+              "count": 2
+            },
+            {
+              "name": "夜幕",
+              "count": 2
+            },
+            {
+              "name": "记忆中往年",
+              "count": 2
+            },
+            {
+              "name": "丨",
+              "count": 2
+            },
+            {
+              "name": "。",
+              "count": 2
+            }
+          ]
         }
       },
       "gift_diamond": 65406,

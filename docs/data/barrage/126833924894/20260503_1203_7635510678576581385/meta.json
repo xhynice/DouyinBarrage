@@ -6,6 +6,7 @@
     "control",
     "gift",
     "like",
+    "lucky_bag",
     "social",
     "stats"
   ],
@@ -14,10 +15,11 @@
     "control": 1,
     "gift": 42893,
     "like": 4437,
+    "lucky_bag": 8563,
     "social": 921,
     "stats": 3000
   },
-  "total": 61214,
+  "total": 69777,
   "rankings": {
     "chat": {
       "top_users": [
@@ -142,6 +144,34 @@
         }
       ],
       "total_likes": 90092
+    },
+    "lucky_bag": {
+      "top_users": [
+        {
+          "name": "唯一",
+          "count": 7
+        },
+        {
+          "name": "六月",
+          "count": 6
+        },
+        {
+          "name": "㣻罖",
+          "count": 6
+        },
+        {
+          "name": "欭惗",
+          "count": 6
+        },
+        {
+          "name": "温素六时",
+          "count": 5
+        },
+        {
+          "name": "陌路",
+          "count": 5
+        }
+      ]
     }
   },
   "gift_diamond": 858479,

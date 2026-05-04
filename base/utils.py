@@ -172,80 +172,92 @@ def load_cookies(cookie_file, script_dir=''):
 
 # ── 配置写回 ──────────────────────────────────────
 
-_config_write_lock = threading.RLock()  # 可重入锁，避免死锁
+_config_write_lock = threading.RLock()
 
 
-def update_room_name_in_config(room_id, anchor_name, config_file='config.yaml'):
-    """更新 config.yaml 中指定房间的主播名字。
+def update_room_name_in_config(room_id, anchor_name, rooms_file='rooms.txt'):
+    """更新或添加 rooms.txt 中的房间记录。
 
     线程安全：通过可重入锁防止多房间并发写入。
-    无条件覆盖 name 字段（调用方负责控制更新时机，如仅首次采集时调用）。
-    通过逐行文本匹配替换，保留注释和格式。
+    - 房间已存在：更新主播名
+    - 房间不存在：追加到文件末尾
+    - 文件不存在：创建文件并写入
 
     Args:
-        room_id: 直播间 ID（rooms[].id）。
+        room_id: 直播间 ID。
         anchor_name: 主播昵称。
-        config_file: 配置文件路径（相对于项目根目录）。
+        rooms_file: 房间文件路径（相对于项目根目录）。
     """
     if not anchor_name:
         return
-    if not os.path.isabs(config_file):
-        config_file = os.path.join(SCRIPT_DIR, config_file)
-    if not os.path.exists(config_file):
-        return
+    if not os.path.isabs(rooms_file):
+        rooms_file = os.path.join(SCRIPT_DIR, rooms_file)
 
     with _config_write_lock:
         try:
-            with open(config_file, 'r', encoding='utf-8') as f:
+            if not os.path.exists(rooms_file):
+                with open(rooms_file, 'w', encoding='utf-8') as f:
+                    f.write(f'{room_id},{anchor_name}\n')
+                return
+
+            with open(rooms_file, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
 
             updated = False
-            found_id = False
+            found = False
             new_lines = []
-            
-            # 精确匹配 ID 行的正则（避免部分匹配）
-            # 匹配：- id: "123"  或  - id: '123'
-            id_pattern = re.compile(rf'^\s*-\s*id:\s*["\']?{re.escape(room_id)}["\']?\s*$')
-            # 精确匹配 name 行的正则（避免值中包含 name:）
-            name_pattern = re.compile(r'^\s*name:\s*')
-            
+
             for line in lines:
-                new_lines.append(line)
-                
-                # 步骤 1：精确匹配 ID 行（排除注释）
-                if not line.strip().startswith('#') and id_pattern.match(line):
-                    found_id = True
-                # 步骤 2：找到同一块中的 name 字段（排除注释）
-                elif found_id and name_pattern.match(line) and not line.strip().startswith('#'):
-                    # 找到同一房间块中的 name 字段，直接覆盖
-                    indent_match = re.match(r'^(\s*)', line)
-                    indent = indent_match.group(1) if indent_match else ''
-                    new_lines[-1] = f'{indent}name: "{anchor_name}"\n'
+                stripped = line.strip()
+                if not stripped:
+                    new_lines.append(line)
+                    continue
+
+                prefix = ''
+                content = stripped
+                if stripped.startswith('#'):
+                    prefix = '#'
+                    content = stripped[1:].strip()
+
+                if not content:
+                    new_lines.append(line)
+                    continue
+
+                parts = content.split(',', 1)
+                if parts[0].strip() == room_id:
+                    indent = re.match(r'^(\s*)', line).group(1) if re.match(r'^(\s*)', line) else ''
+                    new_lines.append(f'{indent}{prefix}{room_id},{anchor_name}\n')
                     updated = True
-                    found_id = False  # 重置，避免连续匹配
+                    found = True
+                else:
+                    new_lines.append(line)
+
+            if not found:
+                if new_lines and not new_lines[-1].endswith('\n'):
+                    new_lines.append('\n')
+                new_lines.append(f'{room_id},{anchor_name}\n')
+                updated = True
 
             if updated:
-                # 原子写入：先写临时文件，再替换
                 import tempfile
                 import shutil
-                
-                fd, temp_path = tempfile.mkstemp(suffix='.yaml', dir=os.path.dirname(config_file))
+
+                fd, temp_path = tempfile.mkstemp(suffix='.txt', dir=os.path.dirname(rooms_file))
                 try:
                     with os.fdopen(fd, 'w', encoding='utf-8') as f:
                         f.writelines(new_lines)
-                    shutil.move(temp_path, config_file)
+                    shutil.move(temp_path, rooms_file)
                 except Exception:
                     if os.path.exists(temp_path):
                         os.remove(temp_path)
                     raise
-                    
+
         except Exception as e:
-            # 写入失败不影响采集，但记录日志
             try:
                 logger = logging.getLogger(__name__)
                 logger.error(f"[配置] 更新主播名失败：room_id={room_id}, error={e}")
             except Exception:
-                pass  # 确保日志异常也不影响采集
+                pass
 
 
 # ── 工具函数 ──────────────────────────────────────

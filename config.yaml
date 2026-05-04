@@ -1,25 +1,10 @@
-# ==================== 多房间配置 ====================
-rooms:
-  - id: "126833924894"
-    name: "张君雅1v4⁸⁰⁰⁸"
-    enabled: true
-  - id: "235371120297"
-    name: "才圆圆⁸⁰⁰⁸"
-    enabled: true
-  - id: "662819707065"
-    name: "贝贝（贝小呆瓜⁸⁰⁰⁸）"
-    enabled: true
-  - id: "798038994362"
-    name: "星夜i⁸⁰⁰⁸"
-    enabled: true
-  - id: "509396162439"
-    name: "蛙宝🐸⁸⁰⁰⁸"
-    enabled: true
-  - id: "587991433704"
-    name: "腿腿吖⁸⁰⁰⁸"
-    enabled: true
+# ==================== 房间配置 ====================
+# 房间列表已移至 rooms.txt 文件
+# 格式：每行一个房间，id,name（逗号分隔）
+# # 开头表示不启用
+
 # ==================== 日志配置 ====================
-log_level: INFO                  # 日志级别: DEBUG / BARRAGE / INFO / WARNING / ERROR / NONE（NONE=关闭日志，数据文件照常写入）
+log_level: INFO                  # 日志级别: DEBUG / BARRAGE（终端输出弹幕） / INFO / WARNING / ERROR / NONE（NONE=关闭日志，数据文件照常写入）
 
 # ==================== Cookie 配置 ====================
 cookie_file: cookie.txt          # Cookie 文件路径（相对于脚本目录），不存在则以游客身份采集

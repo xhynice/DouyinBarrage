@@ -1,0 +1,2 @@
+#下面为cookie值示例 使用你的cookie完全替换此文本内容 并且改名为cookie.txt 否则礼物弹幕受限制
+enter_pc_once=1; UIFID_TEMP=your_uifid_temp_value; live_use_v2c=%22false%22; fpk1=your_fpk1_value; fpk2=your_fpk2_value; bd_ticket_guard_client_web_domain=2; s_v_web_id=verify_xxxxxxxx_xxxxxxxx_xxxx_xxxx_xxxx_xxxxxxxxxxxx; passport_csrf_token=your_csrf_token; passport_csrf_token_default=your_csrf_token; sessionid=your_session_id; sessionid_ss=your_session_id_ss; sid_tt=your_sid_tt; uid_tt=your_uid_tt; sid_guard=your_sid_guard; odin_tt=your_odin_tt

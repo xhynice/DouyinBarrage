@@ -6,6 +6,7 @@
     "control",
     "gift",
     "like",
+    "lucky_bag",
     "social",
     "stats"
   ],
@@ -14,10 +15,11 @@
     "control": 1,
     "gift": 6331,
     "like": 4252,
+    "lucky_bag": 1747,
     "social": 649,
     "stats": 2357
   },
-  "total": 20610,
+  "total": 22357,
   "rankings": {
     "chat": {
       "top_users": [
@@ -142,6 +144,34 @@
         }
       ],
       "total_likes": 85430
+    },
+    "lucky_bag": {
+      "top_users": [
+        {
+          "name": "伟",
+          "count": 3
+        },
+        {
+          "name": "小c",
+          "count": 2
+        },
+        {
+          "name": "夜幕",
+          "count": 2
+        },
+        {
+          "name": "记忆中往年",
+          "count": 2
+        },
+        {
+          "name": "丨",
+          "count": 2
+        },
+        {
+          "name": "。",
+          "count": 2
+        }
+      ]
     }
   },
   "gift_diamond": 65406,

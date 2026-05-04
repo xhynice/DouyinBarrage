@@ -76,42 +76,58 @@ def validate_live_id(live_id: str) -> bool:
     return bool(re.match(r'^\d{6,18}$', live_id))
 
 
-def load_rooms_from_config(config_file='config.yaml'):
-    """从 config.yaml 读取房间列表。
+def load_rooms_from_config(rooms_file='rooms.txt'):
+    """从 rooms.txt 读取房间列表。
 
-    rooms 为列表结构 [{id: ..., name: ...}, ...]。
-    注释掉的列表项不会被 yaml.safe_load 读取，天然跳过。
+    文件格式：
+        - 每行一个房间：id,name（逗号分隔）
+        - # 开头表示不启用
+        - 空行自动跳过
 
     Returns:
         [{'id': str, 'name': str}, ...] 列表，无配置时返回空列表。
     """
-    if not os.path.isabs(config_file):
-        config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), config_file)
+    if not os.path.isabs(rooms_file):
+        rooms_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), rooms_file)
 
-    import yaml
-    try:
-        with open(config_file, 'r', encoding='utf-8') as f:
-            cfg = yaml.safe_load(f) or {}
-    except Exception:
-        return []
-
-    rooms = cfg.get('rooms')
-    if not rooms or not isinstance(rooms, list):
+    if not os.path.exists(rooms_file):
         return []
 
     result = []
     seen = set()
-    for r in rooms:
-        rid = str(r.get('id', '')).strip()
-        # 验证 ID 格式：必须是 6-18 位纯数字
-        if not rid or not validate_live_id(rid) or rid in seen:
-            logger.warning(f"[配置] 跳过无效房间 ID: {rid}")
-            continue
-        seen.add(rid)
-        result.append({
-            'id': rid,
-            'name': (r.get('name') or '').strip(),
-        })
+
+    try:
+        with open(rooms_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                enabled = not line.startswith('#')
+                if not enabled:
+                    line = line[1:].strip()
+
+                if not line:
+                    continue
+
+                parts = line.split(',', 1)
+                rid = parts[0].strip()
+                name = parts[1].strip() if len(parts) > 1 else ''
+
+                if not rid or not validate_live_id(rid) or rid in seen:
+                    logger.warning(f"[配置] 跳过无效房间 ID: {rid}")
+                    continue
+                seen.add(rid)
+
+                if enabled:
+                    result.append({
+                        'id': rid,
+                        'name': name,
+                    })
+    except Exception as e:
+        logger.error(f"[配置] 读取房间文件失败: {e}")
+        return []
+
     return result
 
 
@@ -474,7 +490,7 @@ def main():
             print("""
   编号        1 或 1 2 3 或 1,2,3 或 1-3
   直播间ID    536863152858
-  输入 quit 退出程序
+  输入 q 退出程序
 """)
 
         show_room_list()

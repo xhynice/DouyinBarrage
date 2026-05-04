@@ -134,18 +134,18 @@ class BarrageBuilder:
 
         sessions = []
 
-        for ym_dir in sorted(os.listdir(live_dir)):
-            ym_path = os.path.join(live_dir, ym_dir)
-            if not os.path.isdir(ym_path):
+        for session_id in sorted(os.listdir(live_dir)):
+            session_path = os.path.join(live_dir, session_id)
+            if not os.path.isdir(session_path):
                 continue
 
-            session_groups = self.detect_sessions(ym_path)
+            files = self.collect_session_files(session_path)
+            if not files:
+                continue
 
-            for session_id in sorted(session_groups.keys()):
-                files = session_groups[session_id]
-                session_data = self.build_session(live_id, session_id, files, output_live_dir)
-                if session_data:
-                    sessions.append(session_data)
+            session_data = self.build_session(live_id, session_id, files, output_live_dir)
+            if session_data:
+                sessions.append(session_data)
 
         room_index = {
             'live_id': live_id,
@@ -163,31 +163,21 @@ class BarrageBuilder:
 
         return sessions
     
-    def detect_sessions(self, ym_path):
-        """检测会话分组（支持 CSV 和 JSONL）。
+    def collect_session_files(self, session_path):
+        """收集会话目录下的所有数据文件。
 
-        文件命名格式: {timestamp}_{room_id}_{type}.{csv|jsonl}
-        如 20250401_1430_123456_chat.jsonl
-        按前 3 段 (timestamp_room_id) 作为 session_id 分组，
-        同一会话的不同类型文件归入同一组。
+        目录结构: {时间}_{room_id}/{类型}.csv 或 {类型}.jsonl
 
         Args:
-            ym_path: 年月目录路径（如 data/{live_id}/202504）。
+            session_path: 会话目录路径。
 
         Returns:
-            {session_id: [file_path, ...]} 字典。
+            [file_path, ...] 文件列表。
         """
-        sessions = defaultdict(list)
-        
-        for pattern in ['*_*.jsonl', '*_*.csv']:
-            for file_path in glob.glob(os.path.join(ym_path, pattern)):
-                filename = os.path.basename(file_path)
-                parts = filename.replace('.jsonl', '').replace('.csv', '').split('_')
-                if len(parts) >= 4:
-                    session_id = f"{parts[0]}_{parts[1]}_{parts[2]}"
-                    sessions[session_id].append(file_path)
-        
-        return sessions
+        files = []
+        for pattern in ['*.jsonl', '*.csv']:
+            files.extend(glob.glob(os.path.join(session_path, pattern)))
+        return files
     
     def build_session(self, live_id, session_id, files, output_live_dir):
         """构建单个会话数据。"""
@@ -249,9 +239,7 @@ class BarrageBuilder:
     def extract_type(self, file_path):
         """从文件名提取类型。"""
         filename = os.path.basename(file_path)
-        name = filename.replace('.jsonl', '').replace('.csv', '')
-        parts = name.split('_')
-        return parts[-1] if parts else None
+        return filename.replace('.jsonl', '').replace('.csv', '')
     
     def copy_or_convert(self, src, dst):
         """复制或转换文件。"""

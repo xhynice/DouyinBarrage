@@ -759,19 +759,21 @@ class DouyinBarrage:
     def _watchdog_loop(self):
         """看门狗线程，检测静默断连。
 
-        检查间隔为 silence_timeout / 3（最少 3s，最多 10s）。
-        超过 silence_timeout 秒无消息时强制关闭 WebSocket 触发重连。
-        同时检测连接建立阶段超时（_connected_event 长时间未置位）。
+        首次检测：连接后 3 秒内检测是否有业务消息，无则快速重连
+        后续检测：30 秒无业务消息触发重连
+        完全无数据：使用 silence_timeout 配置
         """
         conn_stop = self._conn_stop
         check_interval = max(min(self._silence_timeout // 3, 10), 3)
         logger.debug(f"[看门狗] 线程启动，检查间隔={check_interval}s，超时阈值={self._silence_timeout}s")
         watchdog_start = time.time()
+        first_check_done = False
+        first_check_timeout = 3.0
+        normal_check_timeout = 30.0
         try:
             while not conn_stop.is_set() and not self._stop_event.is_set():
                 conn_stop.wait(timeout=check_interval)
                 if not self._connected_event.is_set():
-                    # 连接建立阶段也检测超时
                     elapsed = time.time() - watchdog_start
                     if elapsed > self._silence_timeout:
                         logger.warning(f"[看门狗] 连接建立超时 ({elapsed:.0f}s)，强制重连")
@@ -793,7 +795,6 @@ class DouyinBarrage:
                     logger.warning(f"[看门狗] {silence:.0f}s 无数据 (阈值={self._silence_timeout}s)，触发重连")
                     try:
                         self.ws.keep_running = False
-                        # 强制关闭底层 socket，避免 close() 阻塞在发送 close frame 上
                         if self.ws.sock:
                             self.ws.sock.close()
                         self.ws.close()
@@ -801,24 +802,38 @@ class DouyinBarrage:
                         pass
                     break
 
-                # 业务消息检测：有数据但无业务消息（低价值消息不断刷新 _last_msg_time 但无弹幕/礼物等）
-                # _last_business_msg_time == 0 表示连接后从未收到真正的业务消息，
-                # 此时用连接建立时间作为基准计算沉默时长
                 if self._last_business_msg_time > 0:
                     with self._last_business_msg_time_lock:
                         business_silence = time.time() - self._last_business_msg_time
                 else:
                     business_silence = time.time() - getattr(self, '_ws_connected_at', time.time())
-                if business_silence > self._silence_timeout:
-                    logger.info(f"[看门狗] {business_silence:.0f}s 无业务消息 (仅有低价值消息)，触发重连")
-                    try:
-                        self.ws.keep_running = False
-                        if self.ws.sock:
-                            self.ws.sock.close()
-                        self.ws.close()
-                    except Exception:
-                        pass
-                    break
+
+                if not first_check_done:
+                    if business_silence > first_check_timeout:
+                        logger.info(f"[看门狗] 首次检测 {business_silence:.0f}s 无业务消息，快速重连")
+                        first_check_done = True
+                        try:
+                            self.ws.keep_running = False
+                            if self.ws.sock:
+                                self.ws.sock.close()
+                            self.ws.close()
+                        except Exception:
+                            pass
+                        break
+                    elif self._last_business_msg_time > 0:
+                        first_check_done = True
+                        logger.debug("[看门狗] 首次检测通过，已收到业务消息")
+                else:
+                    if business_silence > normal_check_timeout:
+                        logger.info(f"[看门狗] {business_silence:.0f}s 无业务消息 (仅有低价值消息)，触发重连")
+                        try:
+                            self.ws.keep_running = False
+                            if self.ws.sock:
+                                self.ws.sock.close()
+                            self.ws.close()
+                        except Exception:
+                            pass
+                        break
         except Exception as e:
             logger.error(f"[看门狗] 线程异常: {e}")
 
@@ -991,7 +1006,7 @@ class DouyinBarrage:
                             self._last_business_msg_time = time.time()
                             if prev == 0:
                                 delay = time.time() - getattr(self, '_ws_connected_at', 0)
-                                logger.info(f"[连接] 首条业务消息到达: {msg.method} (连接后 {delay:.1f}s)")
+                                logger.info(f"[连接] 开始采集 首条业务消息到达: {msg.method} (连接后 {delay:.1f}s)")
 
                     # 每 3 秒刷新一次面板（节流，避免每条消息都更新）
                     now = time.monotonic()

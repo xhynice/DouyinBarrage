@@ -80,7 +80,7 @@ class BarragePassFilter(logging.Filter):
     def filter(self, record):
         if record.levelno == BARRAGE:
             return self._user_level in (logging.DEBUG, BARRAGE)
-        return record.levelno >= self.level
+        return record.levelno >= self._user_level
 
 class QueueHandler(logging.Handler):
     
@@ -301,7 +301,11 @@ def setup_logger(log_dir='logs', log_level='INFO', multi_room=False):
     """
     logger = logging.getLogger()
     log_enabled = log_level.upper() != 'NONE'
-    user_level = getattr(logging, log_level.upper(), logging.INFO)
+    level_name = log_level.upper()
+    if level_name == 'BARRAGE':
+        user_level = BARRAGE
+    else:
+        user_level = getattr(logging, level_name, logging.INFO)
 
     # 多实例安全：如果已有 handler，说明其他实例已初始化，复用即可
     if logger.handlers:
@@ -456,8 +460,7 @@ class DataRecorder:
             return
         self._room_id = room_id
         self._ts = time.strftime('%Y%m%d_%H%M')
-        ym = time.strftime('%Y%m')
-        self._dir = os.path.join(self._dir, self.live_id, ym)
+        self._dir = os.path.join(self._dir, self.live_id, f"{self._ts}_{room_id}")
         os.makedirs(self._dir, exist_ok=True)
 
         self._flush_thread = threading.Thread(target=self._bg_flush_loop, daemon=True, name='recorder-flush')
@@ -472,7 +475,7 @@ class DataRecorder:
         fields = self.CSV_FIELDS.get(msg_type)
         if not fields:
             return
-        path = os.path.join(self._dir, f"{self._ts}_{self._room_id}_{msg_type}.csv")
+        path = os.path.join(self._dir, f"{msg_type}.csv")
         fp = open(path, 'w', newline='', encoding='utf-8-sig')
         writer = csv.DictWriter(fp, fieldnames=fields)
         writer.writeheader()
@@ -484,7 +487,7 @@ class DataRecorder:
         """首次收到某类型数据时创建对应的 JSONL 文件。"""
         if msg_type in self._json_fps:
             return
-        path = os.path.join(self._dir, f"{self._ts}_{self._room_id}_{msg_type}.jsonl")
+        path = os.path.join(self._dir, f"{msg_type}.jsonl")
         self._json_fps[msg_type] = open(path, 'a', encoding='utf-8')
         self._json_bufs[msg_type] = deque(maxlen=100_000)
 

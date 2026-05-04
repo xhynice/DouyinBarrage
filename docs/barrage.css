@@ -241,6 +241,11 @@ body {
     border: 1px solid var(--border-color);
 }
 
+.custom-select.options-right .custom-select-options {
+    left: auto;
+    right: 0;
+}
+
 .custom-select.open .custom-select-options {
     opacity: 1;
     visibility: visible;

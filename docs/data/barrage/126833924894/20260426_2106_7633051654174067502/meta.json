@@ -6,6 +6,7 @@
     "control",
     "gift",
     "like",
+    "lucky_bag",
     "social",
     "stats"
   ],
@@ -14,10 +15,11 @@
     "control": 1,
     "gift": 9379,
     "like": 4008,
+    "lucky_bag": 229,
     "social": 739,
     "stats": 2432
   },
-  "total": 26696,
+  "total": 26925,
   "rankings": {
     "chat": {
       "top_users": [
@@ -142,6 +144,34 @@
         }
       ],
       "total_likes": 88315
+    },
+    "lucky_bag": {
+      "top_users": [
+        {
+          "name": "小小",
+          "count": 1
+        },
+        {
+          "name": "王德发🧚🏻‍♀️",
+          "count": 1
+        },
+        {
+          "name": "一路生花",
+          "count": 1
+        },
+        {
+          "name": "钱途 似海",
+          "count": 1
+        },
+        {
+          "name": "旁♡̶҉观者",
+          "count": 1
+        },
+        {
+          "name": "𓏸 𓂂 𓈒 🐟",
+          "count": 1
+        }
+      ]
     }
   },
   "gift_diamond": 157790,

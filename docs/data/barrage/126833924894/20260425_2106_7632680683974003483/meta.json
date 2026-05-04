@@ -6,6 +6,7 @@
     "control",
     "gift",
     "like",
+    "lucky_bag",
     "social",
     "stats"
   ],
@@ -14,10 +15,11 @@
     "control": 1,
     "gift": 7077,
     "like": 4063,
+    "lucky_bag": 435,
     "social": 605,
     "stats": 2745
   },
-  "total": 22027,
+  "total": 22462,
   "rankings": {
     "chat": {
       "top_users": [
@@ -142,6 +144,34 @@
         }
       ],
       "total_likes": 88278
+    },
+    "lucky_bag": {
+      "top_users": [
+        {
+          "name": "舁",
+          "count": 2
+        },
+        {
+          "name": "捕捉小金鱼",
+          "count": 2
+        },
+        {
+          "name": "᭄一介🎋俗人ღᩚ᭄",
+          "count": 2
+        },
+        {
+          "name": "执子之手",
+          "count": 2
+        },
+        {
+          "name": "汐希",
+          "count": 2
+        },
+        {
+          "name": "🌸一朵小花",
+          "count": 2
+        }
+      ]
     }
   },
   "gift_diamond": 39052,

@@ -6,6 +6,7 @@
     "control",
     "gift",
     "like",
+    "lucky_bag",
     "social",
     "stats"
   ],
@@ -14,10 +15,11 @@
     "control": 1,
     "gift": 11210,
     "like": 5250,
+    "lucky_bag": 3608,
     "social": 788,
     "stats": 3340
   },
-  "total": 30944,
+  "total": 34552,
   "rankings": {
     "chat": {
       "top_users": [
@@ -142,6 +144,34 @@
         }
       ],
       "total_likes": 112272
+    },
+    "lucky_bag": {
+      "top_users": [
+        {
+          "name": "Lemon",
+          "count": 3
+        },
+        {
+          "name": "欭惗",
+          "count": 3
+        },
+        {
+          "name": "开心",
+          "count": 3
+        },
+        {
+          "name": "Money",
+          "count": 3
+        },
+        {
+          "name": "..",
+          "count": 3
+        },
+        {
+          "name": "祥",
+          "count": 3
+        }
+      ]
     }
   },
   "gift_diamond": 264949,
