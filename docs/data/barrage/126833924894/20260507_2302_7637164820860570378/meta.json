@@ -1,0 +1,179 @@
+{
+  "session_id": "20260507_2302_7637164820860570378",
+  "live_id": "126833924894",
+  "available_types": [
+    "chat",
+    "control",
+    "gift",
+    "like",
+    "lucky_bag",
+    "social",
+    "stats"
+  ],
+  "stats": {
+    "chat": 7110,
+    "control": 1,
+    "gift": 6711,
+    "like": 2225,
+    "lucky_bag": 207,
+    "social": 432,
+    "stats": 1284
+  },
+  "total": 17970,
+  "rankings": {
+    "chat": {
+      "top_users": [
+        {
+          "name": "忙里偷闲⁵¹⁰⁷⁴",
+          "count": 160
+        },
+        {
+          "name": "BWRZ（记录美好）",
+          "count": 59
+        },
+        {
+          "name": "一个人挺好…👿",
+          "count": 56
+        },
+        {
+          "name": "汉、歼的审判者",
+          "count": 47
+        },
+        {
+          "name": "Vincent",
+          "count": 41
+        },
+        {
+          "name": "୧⍤⃝🥕    向新野",
+          "count": 39
+        }
+      ],
+      "top_at": [
+        {
+          "name": "一个人挺好…👿",
+          "count": 32
+        },
+        {
+          "name": "ら孤痞",
+          "count": 21
+        },
+        {
+          "name": "୧⍤⃝🥕    向新野",
+          "count": 18
+        },
+        {
+          "name": "汉、歼的审判者",
+          "count": 15
+        },
+        {
+          "name": "🦁🖤",
+          "count": 9
+        },
+        {
+          "name": "BWRZ（记录美好）",
+          "count": 8
+        }
+      ]
+    },
+    "gift": {
+      "top_users": [
+        {
+          "name": "多年以后🏂",
+          "diamond": 15619,
+          "max_gift": "真的爱你",
+          "max_gift_diamond": 2600
+        },
+        {
+          "name": "张君雅的啤酒瓶",
+          "diamond": 10685,
+          "max_gift": "抖音1号",
+          "max_gift_diamond": 10001
+        },
+        {
+          "name": "子一",
+          "diamond": 10058,
+          "max_gift": "抖音1号",
+          "max_gift_diamond": 10001
+        },
+        {
+          "name": "阿布c",
+          "diamond": 5200,
+          "max_gift": "真的爱你",
+          "max_gift_diamond": 2080
+        },
+        {
+          "name": "春天的虎",
+          "diamond": 3521,
+          "max_gift": "家园神树",
+          "max_gift_diamond": 3000
+        },
+        {
+          "name": "青柠可乐",
+          "diamond": 3109,
+          "max_gift": "花田入梦",
+          "max_gift_diamond": 1888
+        }
+      ],
+      "total_diamond": 81753
+    },
+    "like": {
+      "top_users": [
+        {
+          "name": "晚歌",
+          "count": 2196
+        },
+        {
+          "name": "止于心💫💫💫",
+          "count": 2139
+        },
+        {
+          "name": "🤡小妖怪🤡",
+          "count": 1730
+        },
+        {
+          "name": "小刘妹妹呀",
+          "count": 1128
+        },
+        {
+          "name": "吃不了一点香菜",
+          "count": 780
+        },
+        {
+          "name": "用星渲染夜给得伤",
+          "count": 765
+        }
+      ],
+      "total_likes": 43457
+    },
+    "lucky_bag": {
+      "top_users": [
+        {
+          "name": "Qiii",
+          "count": 1
+        },
+        {
+          "name": "@木子🍓",
+          "count": 1
+        },
+        {
+          "name": "听雨呤风",
+          "count": 1
+        },
+        {
+          "name": "朝清",
+          "count": 1
+        },
+        {
+          "name": "萧~",
+          "count": 1
+        },
+        {
+          "name": "漫漫🥰",
+          "count": 1
+        }
+      ]
+    }
+  },
+  "gift_diamond": 81793,
+  "total_pv": 211000
+}
