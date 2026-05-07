@@ -1,0 +1,149 @@
+{
+  "session_id": "20260507_1203_7636995044138175242",
+  "live_id": "126833924894",
+  "available_types": [
+    "chat",
+    "control",
+    "gift",
+    "like",
+    "social",
+    "stats"
+  ],
+  "stats": {
+    "chat": 6775,
+    "control": 1,
+    "gift": 9497,
+    "like": 3465,
+    "social": 454,
+    "stats": 1860
+  },
+  "total": 22052,
+  "rankings": {
+    "chat": {
+      "top_users": [
+        {
+          "name": "抖音小肋手",
+          "count": 100
+        },
+        {
+          "name": "贝塔β",
+          "count": 60
+        },
+        {
+          "name": "深情不及久伴",
+          "count": 55
+        },
+        {
+          "name": "🌾🌾🌾炒菜不用郭先生🍎🍊🍉🍌",
+          "count": 39
+        },
+        {
+          "name": "BWRZ（记录美好）",
+          "count": 38
+        },
+        {
+          "name": "榴莲酱💫",
+          "count": 38
+        }
+      ],
+      "top_at": [
+        {
+          "name": "深情不及久伴",
+          "count": 42
+        },
+        {
+          "name": "ら孤痞",
+          "count": 27
+        },
+        {
+          "name": "张老黑的飞哥⁵¹⁰⁷⁴",
+          "count": 19
+        },
+        {
+          "name": "抖音小肋手",
+          "count": 16
+        },
+        {
+          "name": "✨名门⭐️",
+          "count": 16
+        },
+        {
+          "name": "汉、歼的审判者",
+          "count": 14
+        }
+      ]
+    },
+    "gift": {
+      "top_users": [
+        {
+          "name": "张老黑的飞哥⁵¹⁰⁷⁴",
+          "diamond": 7605,
+          "max_gift": "时光家园",
+          "max_gift_diamond": 6999
+        },
+        {
+          "name": "锤",
+          "diamond": 5388,
+          "max_gift": "星萤同游",
+          "max_gift_diamond": 3500
+        },
+        {
+          "name": "Kun°",
+          "diamond": 5201,
+          "max_gift": "日落同行",
+          "max_gift_diamond": 5200
+        },
+        {
+          "name": "俊哥 ♛ JimmY",
+          "diamond": 2488,
+          "max_gift": "666",
+          "max_gift_diamond": 100
+        },
+        {
+          "name": "💫",
+          "diamond": 1888,
+          "max_gift": "花田入梦",
+          "max_gift_diamond": 1888
+        },
+        {
+          "name": "我就不爱看🐸",
+          "diamond": 1819,
+          "max_gift": "PK宝箱",
+          "max_gift_diamond": 1200
+        }
+      ],
+      "total_diamond": 52888
+    },
+    "like": {
+      "top_users": [
+        {
+          "name": "③分清醒⑦分醉",
+          "count": 2961
+        },
+        {
+          "name": "抖音小肋手",
+          "count": 2910
+        },
+        {
+          "name": "Summer",
+          "count": 1689
+        },
+        {
+          "name": "用户110524",
+          "count": 1467
+        },
+        {
+          "name": "天空无云",
+          "count": 1322
+        },
+        {
+          "name": "苦菊",
+          "count": 1224
+        }
+      ],
+      "total_likes": 73158
+    }
+  },
+  "gift_diamond": 52941,
+  "total_pv": 349000
+}
