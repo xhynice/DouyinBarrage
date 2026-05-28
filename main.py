@@ -417,6 +417,8 @@ def main():
                         help='直播结束后停止退出（默认跟随配置文件）')
     parser.add_argument('--live-wait', action='store_true',
                         help='直播结束后等待重开播（默认跟随配置文件）')
+    parser.add_argument('--all', action='store_true',
+                        help='采集 rooms.txt 中全部未注释的房间（跳过交互选择）')
 
     args = parser.parse_args()
 
@@ -432,6 +434,21 @@ def main():
     # 注册信号处理
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
+
+    # --all: 采集 rooms.txt 全部未注释房间，跳过交互
+    if args.all:
+        rooms = load_rooms_from_config()
+        if not rooms:
+            print("错误：rooms.txt 中无可用房间")
+            sys.exit(1)
+        for r in rooms:
+            if r.get('name'):
+                RoomLogFilter.update_anchor(r['id'], r['name'])
+        if len(rooms) == 1:
+            start_single_room(rooms[0]['id'], args.log_level, live_stop, rooms=rooms)
+        else:
+            main_multi(rooms, args.log_level, live_stop)
+        return
 
     # 命令行直接指定了ID，单房间模式
     if args.live_id:
