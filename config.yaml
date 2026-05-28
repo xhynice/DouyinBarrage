@@ -28,7 +28,8 @@ output:
   room: false                    # 直播间公告
   roomstats: false               # 直播统计
   control: true                  # 直播状态
-  file_format: csv              # 输出格式: csv / json (JSONL) / both / none
+  gift_combo_final: true         # 礼物连击过滤: true=只记录连击最终值(x520) / false=记录每次递增(x1,x2,...,x520)
+  file_format: csv sqlite       # 输出格式，支持任意组合（空格分隔）: csv / json / sqlite / 留空不保存
   file_dir: data                 # 数据输出目录
 
 # ==================== 网络配置 ====================

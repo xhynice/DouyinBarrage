@@ -70,7 +70,8 @@ class DouyinBarrage:
             'chat': True, 'lucky_bag': True, 'gift': True, 'like': True,
             'member': True, 'social': True, 'rank': True, 'stats': True,
             'fansclub': True, 'emoji': True, 'room': True, 'roomstats': True,
-            'control': True, 'file_format': 'none', 'file_dir': 'data',
+            'control': True, 'gift_combo_final': False,
+            'file_format': 'none', 'file_dir': 'data',
         },
         'network': {
             'http_timeout': 15, 'ws_connect_timeout': 30, 'silence_timeout': 60,

@@ -1,6 +1,6 @@
 # DouyinBarrage
 
-> 抖音直播间弹幕数据实时采集器 — WebSocket 长连接，13 种消息类型，CSV/JSONL 双格式输出。
+> 抖音直播间弹幕数据实时采集器 — WebSocket 长连接，13 种消息类型，CSV / JSONL / SQLite 三格式输出。
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)
@@ -10,7 +10,7 @@
 
 - **实时采集** — 基于 WebSocket 长连接，毫秒级获取直播间弹幕数据
 - **13 种消息** — 弹幕、礼物、点赞、关注、进场、粉丝团、福袋、表情、统计等
-- **双格式输出** — CSV（UTF-8 BOM，Excel 直接打开）和 JSONL
+- **三格式输出** — CSV（UTF-8 BOM，Excel 直接打开）、JSONL、SQLite（跨会话追加，WAL 模式）
 - **登录态支持** — 支持 Cookie 登录，获取完整礼物等数据
 - **多房间并发** — 同时采集多个直播间，状态面板轮显
 - **等待开播** — 下播后自动监控，开播立即重新采集
@@ -140,7 +140,7 @@ log_level: INFO              # 日志级别: DEBUG / BARRAGE / INFO / WARNING / 
 cookie_file: cookie.txt      # Cookie 文件路径
 
 live_stop: false             # 直播结束后是否停止退出: true=结束退出, false=等待重开播
-live_check_interval: 120     # 未开播 HTTP 轮询间隔（秒）
+live_check_interval: 160     # 未开播 HTTP 轮询间隔（秒）
 
 # ==================== 输出配置 ====================
 output:
@@ -157,7 +157,8 @@ output:
   room: false                # 直播间公告
   roomstats: false           # 直播统计
   control: true              # 直播状态
-  file_format: csv           # 输出格式: csv / json / both / none
+  gift_combo_final: false    # 礼物连击过滤: true=只记录最终值(x520) / false=记录每次递增
+  file_format: csv           # 输出格式，支持任意组合（空格分隔）: csv / json / sqlite / 留空不保存
   file_dir: data             # 输出目录
 
 # ==================== 网络配置 ====================
@@ -175,7 +176,7 @@ reconnect_base_delay: 2      # 重连基础延迟（秒），指数退避：2s �
 reconnect_max_delay: 120     # 最大重连延迟（秒），退避封顶
 
 # ==================== 统计配置 ====================
-stats_interval: 300          # 吞吐统计打印间隔（秒）
+stats_interval: 60           # 吞吐统计打印间隔（秒）
 ```
 
 ### 日志级别
@@ -191,12 +192,22 @@ stats_interval: 300          # 吞吐统计打印间隔（秒）
 
 ### 输出格式
 
+`file_format` 支持任意组合（空格分隔），留空或 `none` 表示不保存文件。
+
 | 值 | 说明 |
 |----|------|
-| `none` | 仅输出到日志 |
-| `csv` | 按消息类型分 CSV 文件 |
+| `csv` | 按消息类型分 CSV 文件（UTF-8 BOM，Excel 直接打开） |
 | `json` | 按消息类型分 JSONL 文件 |
-| `both` | CSV + JSONL 同时输出 |
+| `sqlite` | SQLite 数据库（`barrage.db`），跨会话追加，WAL 模式，INTEGER 类型字段 |
+| `csv json` | CSV + JSONL 同时输出 |
+| `csv sqlite` | CSV + SQLite 同时输出 |
+| 留空 | 仅输出到日志，不保存文件 |
+
+SQLite 特性：
+- 数据库位于房间级目录 `data/{live_id}/barrage.db`，跨多次采集追加
+- `time` 字段存储 Unix 秒级时间戳（INTEGER），跨午夜无歧义，视频+弹幕同步只需简单减法
+- 数值字段（如 `gift_count`、`diamond_total`）自动存为 INTEGER 类型
+- 查询时可用 `datetime(time, 'unixepoch', 'localtime')` 转为可读时间
 
 ### 弱网环境推荐配置
 
@@ -238,7 +249,7 @@ network:
 4. 生成签名       → 13 参数拼接 → MD5 → Node.js 执行 sign.js → X-Bogus
 5. WebSocket 连接 → 携带登录 Cookie + 签名建立长连接
 6. 消息处理       → PushFrame → gzip 解压 → Response → 按类型分发
-7. 数据输出       → 异步日志 + CSV/JSONL 批量写入（2s 刷新）
+7. 数据输出       → 异步日志 + CSV/JSONL/SQLite 批量写入（2s 刷新）
 ```
 
 ### 线程模型
@@ -301,24 +312,29 @@ network:
 
 ```
 data/{live_id}/
-├── {YYYYMMDD}_{HHMM}_{roomId}/
+├── barrage.db                  # SQLite 数据库（跨会话追加，需启用 sqlite 格式）
+├── {YYYYMMDD}_{HHMMSS}_{roomId}/
 │   ├── chat.csv
 │   ├── gift.csv
 │   ├── like.csv
 │   ├── social.csv
 │   ├── stats.csv
 │   ├── control.csv
+│   ├── chat.jsonl              # 同时启用 json 格式时生成
 │   └── ...
 └── ...
 ```
 
-- 按直播 ID 建文件夹，每次采集生成独立会话目录
-- 会话目录命名：`{日期}_{时间}_{room_id}`
-- 同一房间多次采集不覆盖，每次生成独立目录
+- 按直播 ID 建文件夹，每次采集生成独立会话目录（CSV/JSONL）
+- 会话目录命名：`{YYYYMMDD}_{HHMMSS}_{room_id}`
+- SQLite 数据库位于房间级目录（`barrage.db`），跨多次采集追加，无需区分会话
+- 同一房间多次采集不覆盖，每次生成独立会话目录
 - 延迟创建：无数据不产生空文件
 - CSV UTF-8 BOM 编码，Excel 直接打开
 
-### CSV 字段
+### CSV / SQLite 字段
+
+CSV 与 SQLite 共用相同字段定义。SQLite 中 `time` 字段存为 Unix 秒级时间戳（INTEGER），数值字段（如 `gift_count`）也存为 INTEGER 类型。
 
 | 类型 | 字段 |
 |------|------|

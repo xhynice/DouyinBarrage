@@ -1,4 +1,4 @@
-"""输出模块：异步日志、数据记录（CSV/JSONL 批量写入）、吞吐统计。
+"""输出模块：异步日志、数据记录（CSV / JSONL / SQLite 批量写入）、吞吐统计。
 
 日志通过 QueueHandler + deque 异步写出，避免阻塞主线程的消息处理。
 数据记录器支持延迟创建 CSV 文件（无数据不产生空文件）。
@@ -12,6 +12,7 @@ import csv
 import json
 import logging
 import os
+import sqlite3
 import sys
 import threading
 import time
@@ -405,14 +406,17 @@ class ThroughputCounter:
 
 
 class DataRecorder:
-    """数据记录器，支持 CSV 和 JSONL 双格式批量写入。
+    """数据记录器，支持 CSV、JSONL、SQLite 三格式批量写入。
 
     生命周期：构造 → open() → record() × N → close()
     CSV 文件延迟创建：首次收到某类型数据时才创建文件并写入表头。
+    SQLite 数据库位于房间级目录（data/{live_id}/barrage.db），跨会话追加。
+    SQLite 的 time 字段存为 Unix 秒级时间戳（INTEGER），用于视频+弹幕同步。
     后台线程每 2s 刷新一次缓冲区（deque 10 万上限，溢出丢弃）。
 
     Attributes:
-        CSV_FIELDS: 各消息类型的 CSV 字段定义。
+        CSV_FIELDS: 各消息类型的字段定义（CSV / SQLite 共用）。
+        INTEGER_FIELDS: 各消息类型中应存为 SQLite INTEGER 的字段集合。
     """
 
     CSV_FIELDS = {
@@ -431,18 +435,52 @@ class DataRecorder:
         'control':  ['time', 'status'],
     }
 
+    # 各消息类型中应存为 SQLite INTEGER 的字段（其余为 TEXT）。
+    # 来源：protobuf 原始类型为 INT64 / UINT64 / UINT32 的字段。
+    INTEGER_FIELDS = {
+        'gift':     {'gift_count', 'diamond_total'},
+        'like':     {'count', 'total'},
+        'member':   {'member_count'},
+        'social':   {'follow_count'},
+        'stats':    {'current'},
+        'emoji':    {'emoji_id'},
+        'roomstats':{'total'},
+        'room':     {'room_id'},
+    }
+
+    @staticmethod
+    def _parse_fmts(raw):
+        """解析 file_format 配置值为格式集合。
+
+        支持：空字符串 / 'none' → 空集（不保存）；
+        'csv json sqlite' → {'csv', 'json', 'sqlite'}。
+        空格或逗号分隔，大小写不敏感。
+        """
+        if not raw:
+            return set()
+        raw = str(raw).strip().lower()
+        if not raw or raw == 'none':
+            return set()
+        return {t.strip() for t in raw.replace(',', ' ').split() if t.strip()}
+
     def __init__(self, live_id: str, config: dict):
         self.live_id = live_id
         output_cfg = config.get('output', {})
-        self._fmt = output_cfg.get('file_format', 'none')
+        self._fmts = self._parse_fmts(output_cfg.get('file_format', ''))
         self._enable_outputs = output_cfg
-        self._dir = output_cfg.get('file_dir', os.path.join(SCRIPT_DIR, 'data'))
+        self._base_dir = output_cfg.get('file_dir', os.path.join(SCRIPT_DIR, 'data'))
+        self._dir = self._base_dir                # CSV/JSONL 会话目录，open() 中更新
+        self._live_dir = None                     # SQLite 房间目录，open() 中设置
 
         self._json_bufs = {}
         self._csv_bufs = {}
         self._csv_writers = {}
         self._csv_fps = {}
         self._json_fps = {}
+        self._db = None
+        self._sqlite_bufs = {}
+        self._sqlite_stmts = {}      # {msg_type: sql} prepared statement 缓存
+        self._room_id = None
         self._lock = threading.Lock()
         self._record_lock = threading.Lock()
         self._stop = threading.Event()
@@ -453,20 +491,36 @@ class DataRecorder:
     def open(self, room_id: str):
         """初始化记录器，创建输出目录和 JSONL 文件（CSV 延迟创建）。
 
+        SQLite 数据库位于房间级目录（data/{live_id}/barrage.db），跨会话追加。
+        CSV/JSONL 文件位于会话级目录（data/{live_id}/{ts}_{room_id}/），每次独立。
+
         Args:
             room_id: 直播间真实 room_id，用于文件命名。
         """
-        if self._opened or self._fmt == 'none':
+        if self._opened or not self._fmts:
             return
         self._room_id = room_id
-        self._ts = time.strftime('%Y%m%d_%H%M')
-        self._dir = os.path.join(self._dir, self.live_id, f"{self._ts}_{room_id}")
-        os.makedirs(self._dir, exist_ok=True)
+        self._ts = time.strftime('%Y%m%d_%H%M%S')
+
+        # 房间级目录：SQLite 始终写到这里
+        self._live_dir = os.path.join(self._base_dir, self.live_id)
+
+        # 会话级目录：CSV/JSONL 写到这里
+        needs_session_dir = ('csv' in self._fmts or 'json' in self._fmts)
+        if needs_session_dir:
+            self._dir = os.path.join(self._live_dir, f"{self._ts}_{room_id}")
+            os.makedirs(self._dir, exist_ok=True)
+        else:
+            self._dir = self._live_dir
+            os.makedirs(self._dir, exist_ok=True)
+
+        if 'sqlite' in self._fmts:
+            self._open_db()
 
         self._flush_thread = threading.Thread(target=self._bg_flush_loop, daemon=True, name='recorder-flush')
         self._flush_thread.start()
         self._opened = True
-        logger.info(f"[数据] 就绪: room_id={room_id}")
+        logger.info(f"[数据] 就绪: room_id={room_id}, 格式={','.join(sorted(self._fmts))}")
 
     def _ensure_csv(self, msg_type: str):
         """首次收到某类型数据时创建对应的 CSV 文件并写入表头。"""
@@ -491,12 +545,103 @@ class DataRecorder:
         self._json_fps[msg_type] = open(path, 'a', encoding='utf-8')
         self._json_bufs[msg_type] = deque(maxlen=100_000)
 
+    # ── SQLite ────────────────────────────────────
+
+    def _open_db(self):
+        """打开房间级 SQLite 数据库，建表。
+
+        WAL 模式允许读写并发，synchronous=NORMAL 在 WAL 下仍保证数据安全。
+        cache_size=-8000 给予 8MB 页缓存，减少磁盘 I/O。
+        """
+        db_path = os.path.join(self._live_dir, 'barrage.db')
+        self._db = sqlite3.connect(db_path, check_same_thread=False)
+        self._db.execute('PRAGMA journal_mode=WAL')
+        self._db.execute('PRAGMA synchronous=NORMAL')
+        self._db.execute('PRAGMA cache_size=-8000')
+        self._db.execute('PRAGMA temp_store=MEMORY')
+        self._init_schema()
+
+    def _init_schema(self):
+        """建表 + 索引。13 张弹幕表，全部幂等。
+
+        time 字段存储 Unix 秒级时间戳（INTEGER），用于视频+弹幕时间同步。
+        """
+        for msg_type, fields in self.CSV_FIELDS.items():
+            int_fields = self.INTEGER_FIELDS.get(msg_type, set())
+            col_defs = []
+            for f in fields:
+                # time 列存 Unix 时间戳（INTEGER），其余按 INTEGER_FIELDS 判定
+                col_type = 'INTEGER' if (f in int_fields or f == 'time') else 'TEXT'
+                col_defs.append(f'"{f}" {col_type}')
+            all_cols = 'id INTEGER PRIMARY KEY AUTOINCREMENT, ' + ', '.join(col_defs)
+
+            table = f'"{msg_type}"' if msg_type == 'like' else msg_type
+            self._db.execute(f'CREATE TABLE IF NOT EXISTS {table} ({all_cols})')
+            self._db.execute(
+                f'CREATE INDEX IF NOT EXISTS idx_{msg_type}_time ON {table}("time")'
+            )
+        self._db.commit()
+
+    def _convert_sqlite_row(self, msg_type, data):
+        """将一条数据字典转为 SQLite 行元组，处理类型转换。
+
+        INTEGER 字段：str/int → int，空字符串 / None / 0 → None（NULL）。
+        TEXT 字段：任何值 → str。
+        time 字段已在 record() 中转为 ISO 8601，此处直接使用。
+        """
+        fields = self.CSV_FIELDS[msg_type]
+        int_fields = self.INTEGER_FIELDS.get(msg_type, set())
+        row = []
+        for f in fields:
+            val = data.get(f, '')
+            if f in int_fields:
+                if isinstance(val, int):
+                    row.append(val if val != 0 else None)
+                elif val is None or val == '':
+                    row.append(None)
+                else:
+                    try:
+                        row.append(int(val))
+                    except (ValueError, TypeError):
+                        row.append(None)
+            else:
+                # Unix 时间戳（int）原样保留，其余转 str
+                row.append(val if isinstance(val, int) else (str(val) if val is not None else ''))
+        return tuple(row)
+
+    def _flush_sqlite(self):
+        """批量写入 SQLite，每批最多 5000 条，失败时回退 deque。"""
+        bufs = self._drain_bufs(self._sqlite_bufs)
+        for msg_type, batch in bufs.items():
+            # 懒缓存 prepared statement
+            if msg_type not in self._sqlite_stmts:
+                fields = self.CSV_FIELDS.get(msg_type, [])
+                table = f'"{msg_type}"' if msg_type == 'like' else msg_type
+                placeholders = ', '.join(['?'] * len(fields))
+                sql = f'INSERT INTO {table} ({", ".join(fields)}) VALUES ({placeholders})'
+                self._sqlite_stmts[msg_type] = sql
+
+            sql = self._sqlite_stmts[msg_type]
+            rows = [self._convert_sqlite_row(msg_type, d) for d in batch]
+            try:
+                self._db.executemany(sql, rows)
+                self._db.commit()
+            except Exception as e:
+                logger.warning(f"[数据] SQLite 写入异常({msg_type} {len(batch)}条): {e}")
+                with self._record_lock:
+                    buf = self._sqlite_bufs.get(msg_type)
+                    if buf is not None:
+                        for d in reversed(batch):
+                            buf.appendleft(d)
+
     def record(self, msg_type: str, data: dict):
         """记录一条数据到缓冲区，由后台线程批量写入磁盘。"""
         if not self._opened:
             return
         with self._record_lock:
-            if self._fmt in ('csv', 'both') and self._enable_outputs.get(msg_type, True):
+            if not self._enable_outputs.get(msg_type, True):
+                return
+            if 'csv' in self._fmts:
                 if msg_type not in self._csv_bufs:
                     self._ensure_csv(msg_type)
                 buf = self._csv_bufs.get(msg_type)
@@ -504,7 +649,7 @@ class DataRecorder:
                     if len(buf) >= buf.maxlen:
                         self._dropped += 1
                     buf.append(data)
-            if self._fmt in ('json', 'both') and self._enable_outputs.get(msg_type, True):
+            if 'json' in self._fmts:
                 if msg_type not in self._json_bufs:
                     self._ensure_json(msg_type)
                 buf = self._json_bufs.get(msg_type)
@@ -512,6 +657,14 @@ class DataRecorder:
                     if len(buf) >= buf.maxlen:
                         self._dropped += 1
                     buf.append(data)
+            if 'sqlite' in self._fmts:
+                buf = self._sqlite_bufs.setdefault(msg_type, deque(maxlen=100_000))
+                if len(buf) >= buf.maxlen:
+                    self._dropped += 1
+                # SQLite 存 Unix 秒级时间戳，消除跨午夜问题，便于视频同步
+                sqlite_data = dict(data)
+                sqlite_data['time'] = int(time.time())
+                buf.append(sqlite_data)
 
     def _bg_flush_loop(self):
         """后台刷新循环，每 2s 将缓冲区数据写入磁盘。"""
@@ -542,7 +695,10 @@ class DataRecorder:
         return batches
 
     def _do_flush(self):
-        """执行一次批量刷新：CSV 和 JSONL 各取最多 5000 条写出。"""
+        """执行一次批量刷新：CSV、JSONL、SQLite 各取最多 5000 条写出。"""
+        if 'sqlite' in self._fmts:
+            self._flush_sqlite()
+
         with self._lock:
             csv_batches = self._drain_bufs(self._csv_bufs)
             json_batches = self._drain_bufs(self._json_bufs)
@@ -586,7 +742,7 @@ class DataRecorder:
                 logger.warning(f"[数据] JSONL 写入异常，{len(batch)} 条数据已回退")
 
     def close(self):
-        """停止后台线程，刷新剩余数据，关闭所有文件句柄。"""
+        """停止后台线程，刷新剩余数据，关闭所有句柄。"""
         if not self._opened:
             return
         self._stop.set()
@@ -595,6 +751,7 @@ class DataRecorder:
             # join 超时说明线程仍在运行，不再自行 flush 避免并发写入
             if self._flush_thread.is_alive():
                 logger.warning("[数据] 刷新线程未在 5 秒内退出，跳过最终刷新")
+        self._do_flush()
         for fp in self._csv_fps.values():
             try:
                 fp.close()
@@ -605,5 +762,11 @@ class DataRecorder:
                 fp.close()
             except Exception:
                 pass
+        if self._db is not None:
+            try:
+                self._db.close()
+            except Exception:
+                pass
+            self._db = None
         self._opened = False
         logger.info("[数据] 记录器已关闭")

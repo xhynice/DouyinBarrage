@@ -75,9 +75,13 @@ def parse_gift_msg(payload, enable_outputs=None):
     抖币计算：gift.diamond_count × combo_count（或 total_count / repeat_count）。
     全部为 0 时不显示抖币信息。
 
+    gift_combo_final 模式：连击进行中的消息（repeat_end == 0）直接丢弃，
+    只保留最终值。单次赠送（combo_count / repeat_count ≤ 1）不受影响。
+
     Args:
         payload: GiftMessage protobuf 序列化字节。
-        enable_outputs: 输出开关字典，key='gift' 控制是否输出。
+        enable_outputs: 输出开关字典，key='gift' 控制是否输出，
+            key='gift_combo_final' 控制是否只记录连击最终值。
 
     Returns:
         结果字典列表。类型为 'gift'。
@@ -85,6 +89,11 @@ def parse_gift_msg(payload, enable_outputs=None):
     if not enable_outputs.get('gift', True):
         return []
     msg = parse_proto(GiftMessage, payload)
+    # 连击过滤：丢弃进行中的中间消息，只保留最终值
+    if enable_outputs.get('gift_combo_final') and msg.repeat_end == 0:
+        combo = msg.combo_count or msg.repeat_count or 0
+        if combo > 1:
+            return []
     user = msg.user
     uid = get_user_id(user)
     gift = msg.gift
