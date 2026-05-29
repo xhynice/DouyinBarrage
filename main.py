@@ -257,59 +257,6 @@ class RoomsWatcher:
         logger.info(f"[热加载] 完成，当前 {len(new_ids)} 个房间")
 
 
-class ConfigSourceWatcher:
-    """监控 URL_config.ini 变化，自动更新 rooms.txt。"""
-
-    def __init__(self, config_source, rooms_file, check_interval=10):
-        self._config_source = config_source
-        self._rooms_file = rooms_file
-        self._interval = check_interval
-        self._last_mtime = self._get_mtime()
-        self._stop_event = threading.Event()
-        self._thread = threading.Thread(target=self._watch_loop, name="config-watcher", daemon=True)
-
-    def _get_mtime(self):
-        try:
-            return os.path.getmtime(self._config_source)
-        except OSError:
-            return 0
-
-    def start(self):
-        self._thread.start()
-        logger.info(f"[配置监控] 监控 {self._config_source} → 自动更新 rooms.txt")
-
-    def stop(self):
-        self._stop_event.set()
-
-    def _watch_loop(self):
-        while not self._stop_event.is_set():
-            self._stop_event.wait(self._interval)
-            if self._stop_event.is_set():
-                break
-            current_mtime = self._get_mtime()
-            if current_mtime == self._last_mtime:
-                continue
-            self._last_mtime = current_mtime
-            self._generate_rooms_txt()
-
-    def _generate_rooms_txt(self):
-        try:
-            with open(self._config_source, encoding="utf-8-sig") as f:
-                lines = f.readlines()
-            with open(self._rooms_file, "w") as out:
-                for line in lines:
-                    line = line.strip()
-                    if line and not line.startswith("#"):
-                        import re as _re
-                        m = _re.search(r"douyin\.com/(\d+)", line)
-                        if m:
-                            name = line.split("主播: ")[-1] if "主播:" in line else ""
-                            out.write(f"{m.group(1)},{name}\n")
-            logger.info(f"[配置监控] rooms.txt 已更新（源: {self._config_source}）")
-        except Exception as e:
-            logger.error(f"[配置监控] 更新 rooms.txt 失败: {e}")
-
-
 def _parse_range(part, rooms_count):
     """解析范围输入如 '1-3' 或 '2-5'。
 
@@ -439,7 +386,7 @@ def parse_user_input(user_input, rooms):
     return None, None, warnings
 
 
-def main_multi(room_list, log_level, live_stop, config_source=None):
+def main_multi(room_list, log_level, live_stop):
     """多房间模式入口（支持热加载 rooms.txt）。
 
     Args:
@@ -485,12 +432,6 @@ def main_multi(room_list, log_level, live_stop, config_source=None):
     watcher = RoomsWatcher(rooms_file, log_level, live_stop)
     watcher.start()
 
-    # 如果指定了 config_source，启动 URL_config.ini 监控
-    config_watcher = None
-    if config_source:
-        config_watcher = ConfigSourceWatcher(config_source, rooms_file)
-        config_watcher.start()
-
     print(f"\n[主控] {len(room_list)} 个采集线程已启动\n")
 
     # 等待：直到所有房间线程退出或用户中断
@@ -513,8 +454,6 @@ def main_multi(room_list, log_level, live_stop, config_source=None):
         time.sleep(2)
 
     watcher.stop()
-    if config_watcher:
-        config_watcher.stop()
     print("[主控] 所有采集已停止")
 
 
@@ -578,8 +517,6 @@ def main():
                         help='直播结束后等待重开播（默认跟随配置文件）')
     parser.add_argument('--all', action='store_true',
                         help='采集 rooms.txt 中全部未注释的房间（跳过交互选择）')
-    parser.add_argument('--config-source', type=str, default=None,
-                        help='URL_config.ini 路径，监控变化自动更新 rooms.txt')
 
     args = parser.parse_args()
 
@@ -608,7 +545,7 @@ def main():
         if len(rooms) == 1:
             start_single_room(rooms[0]['id'], args.log_level, live_stop, rooms=rooms)
         else:
-            main_multi(rooms, args.log_level, live_stop, config_source=args.config_source)
+            main_multi(rooms, args.log_level, live_stop)
         return
 
     # 命令行直接指定了ID，单房间模式
