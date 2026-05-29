@@ -35,6 +35,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    - name: Fetch barrage data from data branch
+      run: |
+        git fetch origin barrage-data
+        git checkout origin/barrage-data -- data/ 2>/dev/null || echo "数据分支暂无数据"
+
     - name: Build site data
       run: python docs/build_barrage.py
 
