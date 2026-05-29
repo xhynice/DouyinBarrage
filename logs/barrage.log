@@ -1,0 +1,54 @@
+[05-29 14:24] [INFO] [张君雅1v4⁸⁰⁰⁸] [启动] 已加载 Cookie（48 项），包含 sessionid，待连接后验证登录态
+[05-29 14:24] [INFO] [张君雅1v4⁸⁰⁰⁸] [启动] live_id: 126833924894
+[05-29 14:24] [INFO] [张君雅1v4⁸⁰⁰⁸] [启动] UA: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36
+[05-29 14:24] [INFO] [张君雅1v4⁸⁰⁰⁸] [启动] user_unique_id: 8050528561312390291
+[05-29 14:24] [INFO] [张君雅1v4⁸⁰⁰⁸] [启动] 网络配置: http_timeout=15s, ws_connect_timeout=30s, silence_timeout=60s, heartbeat_interval=10s, rcvbuf=512KB
+[05-29 14:24] [INFO] [张君雅1v4⁸⁰⁰⁸] [连接] 第 1 次连接
+[05-29 14:24] [INFO] [张君雅1v4⁸⁰⁰⁸] [房间] 已登录「一线印象」
+[05-29 14:24] [INFO] [张君雅1v4⁸⁰⁰⁸] [房间] Cookie 有效期至 2026-07-05
+[05-29 14:24] [INFO] [张君雅1v4⁸⁰⁰⁸] [房间] 张君雅1v4⁸⁰⁰⁸ 直播中
+[05-29 14:24] [INFO] [张君雅1v4⁸⁰⁰⁸] [连接] user_unique_id 已刷新: 8050528561312390291 → 7756540887052425653
+[05-29 14:24] [INFO] [张君雅1v4⁸⁰⁰⁸] Websocket connected
+[05-29 14:24] [INFO] [张君雅1v4⁸⁰⁰⁸] [连接] WebSocket 已建立
+[05-29 14:24] [INFO] [张君雅1v4⁸⁰⁰⁸] [数据] 就绪: 张君雅1v4⁸⁰⁰⁸, 格式=csv,sqlite
+[05-29 14:24] [INFO] [张君雅1v4⁸⁰⁰⁸] [连接] 开始采集 首条业务消息到达: WebcastGiftMessage (连接后 0.9s)
+[05-29 14:25] [INFO] [统计] 总计:93 | 1.4msg/s | [chat:26, like:25, gift:20, roomuserseq:16, social:6]
+[05-29 14:26] [INFO] [统计] 总计:176 | 1.4msg/s | [gift:50, like:44, chat:42, roomuserseq:30, social:9]
+[05-29 14:27] [INFO] [统计] 总计:225 | 1.2msg/s | [like:61, gift:58, chat:53, roomuserseq:42, social:10]
+[05-29 14:28] [INFO] [统计] 总计:389 | 1.6msg/s | [chat:167, like:80, gift:72, roomuserseq:55, social:13]
+[05-29 14:29] [INFO] [统计] 总计:528 | 1.7msg/s | [chat:236, gift:109, like:100, roomuserseq:67, social:14]
+[05-29 14:30] [INFO] [统计] 总计:689 | 1.9msg/s | [chat:277, gift:165, like:120, roomuserseq:79, unknown:31]
+[05-29 14:31] [INFO] [统计] 总计:803 | 1.9msg/s | [chat:339, gift:182, like:140, roomuserseq:89, unknown:33]
+[05-29 14:32] [INFO] [统计] 总计:870 | 1.8msg/s | [chat:359, gift:195, like:160, roomuserseq:101, unknown:34]
+[05-29 14:33] [INFO] [统计] 总计:930 | 1.7msg/s | [chat:378, gift:204, like:180, roomuserseq:110, unknown:34]
+[05-29 14:34] [INFO] [统计] 总计:986 | 1.6msg/s | [chat:388, gift:215, like:200, roomuserseq:121, unknown:35]
+[05-29 14:35] [INFO] [统计] 总计:1047 | 1.6msg/s | [chat:400, gift:227, like:219, roomuserseq:136, unknown:36]
+[05-29 14:36] [INFO] [统计] 总计:1105 | 1.5msg/s | [chat:416, gift:241, like:239, roomuserseq:143, unknown:36]
+[05-29 14:37] [INFO] [统计] 总计:1181 | 1.5msg/s | [chat:433, gift:260, like:259, roomuserseq:157, unknown:37]
+[05-29 14:38] [INFO] [统计] 总计:1237 | 1.5msg/s | [chat:445, like:278, gift:269, roomuserseq:168, social:39]
+[05-29 14:39] [INFO] [统计] 总计:1295 | 1.4msg/s | [chat:460, like:297, gift:282, roomuserseq:177, social:40]
+[05-29 14:40] [INFO] [统计] 总计:1377 | 1.4msg/s | [chat:477, like:316, gift:315, roomuserseq:187, social:41]
+[05-29 14:41] [INFO] [统计] 总计:1447 | 1.4msg/s | [chat:488, gift:337, like:337, roomuserseq:198, social:44]
+[05-29 14:42] [INFO] [统计] 总计:1499 | 1.4msg/s | [chat:496, like:356, gift:350, roomuserseq:209, social:45]
+[05-29 14:43] [INFO] [统计] 总计:1554 | 1.4msg/s | [chat:510, like:376, gift:359, roomuserseq:218, social:47]
+[05-29 14:44] [INFO] [统计] 总计:1657 | 1.4msg/s | [chat:555, like:396, gift:379, roomuserseq:230, social:50]
+[05-29 14:45] [INFO] [统计] 总计:1746 | 1.4msg/s | [chat:592, like:416, gift:399, roomuserseq:241, social:51]
+[05-29 14:46] [INFO] [统计] 总计:1820 | 1.4msg/s | [chat:613, like:436, gift:415, roomuserseq:257, social:52]
+[05-29 14:47] [INFO] [统计] 总计:1881 | 1.4msg/s | [chat:631, like:456, gift:425, roomuserseq:267, social:54]
+[05-29 14:48] [INFO] [统计] 总计:2028 | 1.4msg/s | [chat:684, gift:476, like:476, roomuserseq:282, social:58]
+[05-29 14:49] [INFO] [统计] 总计:2112 | 1.4msg/s | [chat:712, gift:496, like:495, roomuserseq:295, social:58]
+[05-29 14:50] [INFO] [统计] 总计:2380 | 1.5msg/s | [chat:730, gift:668, like:515, roomuserseq:308, unknown:101]
+[05-29 14:51] [INFO] [统计] 总计:2529 | 1.6msg/s | [chat:749, gift:746, like:534, roomuserseq:324, unknown:117]
+[05-29 14:52] [INFO] [统计] 总计:2597 | 1.5msg/s | [gift:764, chat:757, like:552, roomuserseq:339, unknown:124]
+[05-29 14:53] [INFO] [统计] 总计:2700 | 1.5msg/s | [gift:792, chat:780, like:572, roomuserseq:351, unknown:127]
+[05-29 14:54] [INFO] [统计] 总计:2800 | 1.6msg/s | [gift:828, chat:795, like:592, roomuserseq:362, unknown:134]
+[05-29 14:55] [INFO] [统计] 总计:3034 | 1.6msg/s | [gift:942, chat:848, like:612, roomuserseq:375, unknown:167]
+[05-29 14:56] [INFO] [统计] 总计:3183 | 1.7msg/s | [gift:981, chat:906, like:632, roomuserseq:388, unknown:176]
+[05-29 14:57] [INFO] [统计] 总计:3411 | 1.7msg/s | [gift:1111, chat:933, like:651, roomuserseq:401, unknown:210]
+[05-29 14:58] [WARNING] [张君雅1v4⁸⁰⁰⁸] [控制] 直播间已结束，停止采集
+[05-29 14:58] [INFO] [张君雅1v4⁸⁰⁰⁸] [控制] 停止采集
+[05-29 14:58] [WARNING] [看门狗] 连接建立超时 (2030s)，强制重连
+[05-29 14:58] [INFO] [张君雅1v4⁸⁰⁰⁸] [统计] 最终: 总计:3489 | 1.7msg/s | [gift:1141, chat:947, like:666, roomuserseq:411, unknown:218]
+[05-29 14:58] [INFO] [张君雅1v4⁸⁰⁰⁸] [数据] 记录器已关闭
+[05-29 14:58] [INFO] [张君雅1v4⁸⁰⁰⁸] [连接] WebSocket 已关闭 (code=None)
+[05-29 14:58] [INFO] [张君雅1v4⁸⁰⁰⁸] [控制] 采集主循环退出
