@@ -1,7 +1,0 @@
-# 让特定目录的 JS 文件不计入统计
-docs/barrage.js linguist-detectable=false
-sign.js linguist-detectable=false
-# 让整个目录不计入统计
-# data/** linguist-detectable=false
-# docs/** linguist-detectable=false
-*.db filter=lfs diff=lfs merge=lfs -text
