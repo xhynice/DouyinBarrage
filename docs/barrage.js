@@ -106,7 +106,7 @@ const BarrageApp = (function() {
         render: (item) => JSON.stringify(item)
     };
 
-    const AVATAR_PLACEHOLDER = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 28 28%22><rect fill=%22%23ddd%22 width=%2228%22 height=%2228%22/><text x=%2214%22 y=%2214%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-size=%2210%22>?</text></svg>`;
+    const AVATAR_PLACEHOLDER = getPlaceholderSvg();
 
     const ESCAPE_MAP = {
         '&': '&amp;',
@@ -124,10 +124,11 @@ const BarrageApp = (function() {
         roomSessions: [],
         allData: [],
         roomData: [],
+        roomDataMonth: null,
         filteredData: [],
         displayedCount: 0,
         pageSize: 300,
-        selectedYear: null,
+        selectedYearMonth: null,
         filters: {
             types: [],
             search: ''
@@ -143,6 +144,28 @@ const BarrageApp = (function() {
     function escapeHtml(text) {
         if (!text) return '';
         return String(text).replace(/[&<>"']/g, ch => ESCAPE_MAP[ch]);
+    }
+
+    function toSec(t) {
+        const parts = t.split(':');
+        return parts.length >= 2 ? parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + (parseInt(parts[2]) || 0) : 0;
+    }
+
+    function sortByTime(items) {
+        items.sort((a, b) => {
+            const timeA = a.time || '';
+            const timeB = b.time || '';
+            if (!timeA || !timeB) return 0;
+            const cmp = timeB.localeCompare(timeA);
+            if (cmp === 0) return 0;
+            const secA = toSec(timeA);
+            const secB = toSec(timeB);
+            if (Math.abs(secB - secA) > 43200) {
+                return secB > secA ? -1 : 1;
+            }
+            return cmp;
+        });
+        return items;
     }
 
     function getGradeClass(level) {
@@ -181,21 +204,24 @@ const BarrageApp = (function() {
     }
 
     function parseSessionId(sessionId) {
-        const parts = sessionId.split('_');
-        if (parts.length >= 2) {
-            const dateStr = parts[0];
-            const timeStr = parts[1];
+        // 格式: "20260529_1148"
+        const m = sessionId.match(/^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})$/);
+        if (m) {
             return {
-                year: dateStr.substring(0, 4),
-                month: parseInt(dateStr.substring(4, 6)),
-                day: parseInt(dateStr.substring(6, 8)),
-                hour: timeStr.substring(0, 2),
-                minute: timeStr.substring(2, 4),
-                dateLabel: `${parseInt(dateStr.substring(4, 6))}月${parseInt(dateStr.substring(6, 8))}日`,
-                timeLabel: `${timeStr.substring(0, 2)}:${timeStr.substring(2, 4)}`
+                year: m[1],
+                month: parseInt(m[2]),
+                day: parseInt(m[3]),
+                hour: m[4],
+                minute: m[5]
             };
         }
         return null;
+    }
+
+    function formatSessionLabel(sessionId) {
+        // "20260529_1148" → "20260529_11:48"
+        const m = sessionId.match(/^(\d{8}_\d{2})(\d{2})$/);
+        return m ? `${m[1]}:${m[2]}` : sessionId;
     }
 
     function renderBarrageItem(item, index) {
@@ -261,26 +287,7 @@ const BarrageApp = (function() {
             }
             return items;
         }));
-        const items = results.flat();
-        items.sort((a, b) => {
-            const timeA = a.time || '';
-            const timeB = b.time || '';
-            if (!timeA || !timeB) return 0;
-            const cmp = timeB.localeCompare(timeA);
-            if (cmp === 0) return 0;
-            const toSec = t => {
-                const parts = t.split(':');
-                return parts.length >= 2 ? parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + (parseInt(parts[2]) || 0) : 0;
-            };
-            const secA = toSec(timeA);
-            const secB = toSec(timeB);
-            const diff = Math.abs(secB - secA);
-            if (diff > 43200) {
-                return secB > secA ? -1 : 1;
-            }
-            return cmp;
-        });
-        return items;
+        return sortByTime(results.flat());
     }
 
     async function loadIndex() {
@@ -297,7 +304,7 @@ const BarrageApp = (function() {
             document.getElementById('empty-state').innerHTML = `
                 <div class="empty-icon">❌</div>
                 <p>加载数据失败，请先运行构建脚本</p>
-                <p style="color: var(--text-secondary); margin-top: 10px;">python scripts/build_barrage.py</p>
+                <p style="color: var(--text-secondary); margin-top: 10px;">python docs/build_barrage.py</p>
             `;
         }
     }
@@ -388,12 +395,12 @@ const BarrageApp = (function() {
     }
 
     function resetCascadingSelects() {
-        state.selectedYear = null;
+        state.selectedYearMonth = null;
         ['year-select', 'datetime-select'].forEach(id => {
             const el = document.getElementById(id);
             el.classList.add('hidden');
             el.querySelector('.custom-select-trigger span').textContent =
-                id === 'year-select' ? '选择年份' : '选择日期时间';
+                id === 'year-select' ? '选择年月' : '选择会话';
         });
     }
 
@@ -410,9 +417,12 @@ const BarrageApp = (function() {
 
         state.currentLiveId = liveId;
         state.roomData = [];
+        state.roomDataMonth = null;
         state.searchIndex = { session: null, room: null };
         state.dateFilter = '';
         state.cachedFilters = null;
+        state.filters.types = [];
+        state.filters.search = '';
         resetCascadingSelects();
         resetDateFilter();
 
@@ -427,10 +437,9 @@ const BarrageApp = (function() {
 
             const displayName = data.anchor_name || liveId;
             const avatarUrl = `data/barrage/${liveId}/avatar.jpg`;
-            const title = data.room_title ? ` | ${data.room_title}` : '';
 
             updateHeader(`${displayName} - 弹幕记录`, displayName, avatarUrl);
-            document.getElementById('subtitle').textContent = `${liveId}${title}`;
+            document.getElementById('subtitle').textContent = data.room_title || '';
 
             document.getElementById('search-box').classList.remove('hidden');
             showLoading(false);
@@ -440,7 +449,7 @@ const BarrageApp = (function() {
                 return;
             }
 
-            renderYearList(sessions);
+            renderYearMonthList(sessions);
             renderDateFilterOptions(sessions);
 
             const roomInfo = (state.index.live_rooms || []).find(r => r.live_id === liveId);
@@ -448,15 +457,19 @@ const BarrageApp = (function() {
             if (latestSession) {
                 const parsed = parseSessionId(latestSession);
                 if (parsed) {
-                    selectYear(parsed.year);
+                    const ym = parsed.year + '-' + String(parsed.month).padStart(2, '0');
+                    selectYearMonth(ym);
                     selectDatetime(latestSession);
                     return;
                 }
             }
 
-            const years = [...new Set(sessions.map(s => parseSessionId(s.session_id)?.year).filter(Boolean))];
-            if (years.length === 1) {
-                selectYear(years[0]);
+            const ymSet = [...new Set(sessions.map(s => {
+                const p = parseSessionId(s.session_id);
+                return p ? p.year + '-' + String(p.month).padStart(2, '0') : null;
+            }).filter(Boolean))];
+            if (ymSet.length === 1) {
+                selectYearMonth(ymSet[0]);
             }
         } catch (error) {
             console.error('加载直播间索引失败:', error);
@@ -465,28 +478,28 @@ const BarrageApp = (function() {
         }
     }
 
-    function renderYearList(sessions) {
+    function renderYearMonthList(sessions) {
         const container = document.getElementById('year-options');
-        const yearMap = new Map();
+        const ymMap = new Map();
 
         sessions.forEach(s => {
             const parsed = parseSessionId(s.session_id);
             if (parsed) {
-                if (!yearMap.has(parsed.year)) {
-                    yearMap.set(parsed.year, 0);
-                }
-                yearMap.set(parsed.year, yearMap.get(parsed.year) + (s.total || 0));
+                const ym = parsed.year + '-' + String(parsed.month).padStart(2, '0');
+                if (!ymMap.has(ym)) ymMap.set(ym, 0);
+                ymMap.set(ym, ymMap.get(ym) + (s.total || 0));
             }
         });
 
-        const years = [...yearMap.keys()].sort().reverse();
+        const ymKeys = [...ymMap.keys()].sort().reverse();
 
-        container.innerHTML = years.map(year => `
-            <div class="custom-select-option" data-value="${year}" data-label="${year}年">
-                ${year}年
-                <span class="option-meta">${yearMap.get(year)} 条</span>
-            </div>
-        `).join('');
+        container.innerHTML = ymKeys.map(ym => {
+            const [y, m] = ym.split('-');
+            return `<div class="custom-select-option" data-value="${ym}" data-label="${y}年${parseInt(m)}月">
+                ${y}年${parseInt(m)}月
+                <span class="option-meta">${ymMap.get(ym)} 条</span>
+            </div>`;
+        }).join('');
 
         document.getElementById('year-select').classList.remove('hidden');
     }
@@ -532,37 +545,37 @@ const BarrageApp = (function() {
         wrapper.querySelector('.custom-select-trigger').dataset.value = 'session';
     }
 
-    function selectYear(year) {
-        state.selectedYear = year;
-        document.querySelector('#year-select .custom-select-trigger span').textContent = `${year}年`;
+    function selectYearMonth(ym) {
+        state.selectedYearMonth = ym;
+        const [y, m] = ym.split('-');
+        document.querySelector('#year-select .custom-select-trigger span').textContent = `${y}年${parseInt(m)}月`;
 
         const datetimeSelect = document.getElementById('datetime-select');
         datetimeSelect.classList.add('hidden');
-        datetimeSelect.querySelector('.custom-select-trigger span').textContent = '选择日期时间';
+        datetimeSelect.querySelector('.custom-select-trigger span').textContent = '选择会话';
 
         const filtered = state.roomSessions.filter(s => {
             const parsed = parseSessionId(s.session_id);
-            return parsed && parsed.year === year;
+            return parsed && (parsed.year + '-' + String(parsed.month).padStart(2, '0')) === ym;
         });
 
-        renderDatetimeList(filtered);
+        renderSessionList(filtered);
 
         if (filtered.length === 1) {
             selectDatetime(filtered[0].session_id);
         }
     }
 
-    function renderDatetimeList(sessions) {
+    function renderSessionList(sessions) {
         const container = document.getElementById('datetime-options');
 
         const sorted = [...sessions].sort((a, b) => (b.session_id || '').localeCompare(a.session_id || ''));
 
         container.innerHTML = sorted.map(session => {
-            const parsed = parseSessionId(session.session_id);
-            const label = parsed ? `${parsed.dateLabel} ${parsed.timeLabel}` : session.session_id;
+            const label = formatSessionLabel(session.session_id);
             return `
                 <div class="custom-select-option" data-value="${session.session_id}" data-label="${label}">
-                    ${label}
+                    ${escapeHtml(label)}
                     <span class="option-meta">${session.total || 0} 条</span>
                 </div>
             `;
@@ -572,14 +585,24 @@ const BarrageApp = (function() {
     }
 
     function selectDatetime(sessionId) {
-        const parsed = parseSessionId(sessionId);
-        const label = parsed ? `${parsed.dateLabel} ${parsed.timeLabel}` : sessionId;
-        document.querySelector('#datetime-select .custom-select-trigger span').textContent = label;
+        document.querySelector('#datetime-select .custom-select-trigger span').textContent = formatSessionLabel(sessionId);
         selectSession(sessionId);
     }
 
     async function selectSession(sessionId) {
         state.currentSession = sessionId;
+        state.filters.types = [];
+        state.filters.search = '';
+        state.dateFilter = 'session';
+        state.cachedFilters = null;
+        document.getElementById('search-input').value = '';
+
+        const dateFilterTrigger = document.querySelector('#date-filter-wrapper .custom-select-trigger');
+        dateFilterTrigger.dataset.value = 'session';
+        dateFilterTrigger.querySelector('span').textContent = '当前会话';
+        document.querySelectorAll('#date-filter-options .custom-select-option').forEach(opt => {
+            opt.classList.toggle('active', opt.dataset.value === 'session');
+        });
 
         showLoading(true);
         hideEmpty();
@@ -673,27 +696,29 @@ const BarrageApp = (function() {
         const pvEl = document.getElementById('stat-pv');
         if (meta.total_pv) {
             const pv = typeof meta.total_pv === 'string' ? parseInt(meta.total_pv) || 0 : meta.total_pv;
-            if (pv >= 10000) {
-                pvEl.innerHTML = `${(pv / 10000).toFixed(1)}<small class="pv-unit">万</small>`;
-            } else {
-                pvEl.textContent = pv;
-            }
+            pvEl.innerHTML = formatNumber(pv);
         } else {
             pvEl.textContent = '-';
         }
     }
 
-    async function loadRoomData() {
-        if (state.roomData.length > 0) return;
+    async function loadRoomData(monthFilter) {
+        let sessions = state.roomSessions;
+        if (monthFilter) {
+            sessions = sessions.filter(s => {
+                const p = parseSessionId(s.session_id);
+                return p && (p.year + '-' + String(p.month).padStart(2, '0')) === monthFilter;
+            });
+        }
+        if (sessions.length === 0) return;
 
-        const sessions = state.roomSessions;
         const total = sessions.length;
         const batchSize = 5;
         const allItems = [];
 
         for (let i = 0; i < total; i += batchSize) {
             const batch = sessions.slice(i, i + batchSize);
-            showLoading(true, `加载全直播间数据... ${Math.min(i + batchSize, total)}/${total}`);
+            showLoading(true, `加载数据... ${Math.min(i + batchSize, total)}/${total}`);
             const batchResults = await Promise.all(batch.map(session => {
                 const types = session.available_types || [];
                 return loadJsonlData(
@@ -708,31 +733,21 @@ const BarrageApp = (function() {
         }
 
         allItems.sort((a, b) => {
-            const sessA = a._session || '';
-            const sessB = b._session || '';
-            const dateA = sessA.split('_')[0] || '';
-            const dateB = sessB.split('_')[0] || '';
-            if (dateA !== dateB) {
-                return dateB.localeCompare(dateA);
-            }
+            const dateA = (a._session || '').split('_')[0] || '';
+            const dateB = (b._session || '').split('_')[0] || '';
+            if (dateA !== dateB) return dateB.localeCompare(dateA);
             const timeA = a.time || '';
             const timeB = b.time || '';
             if (!timeA || !timeB) return 0;
             const cmp = timeB.localeCompare(timeA);
             if (cmp === 0) return 0;
-            const toSec = t => {
-                const parts = t.split(':');
-                return parts.length >= 2 ? parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + (parseInt(parts[2]) || 0) : 0;
-            };
-            const secA = toSec(timeA);
-            const secB = toSec(timeB);
-            const diff = Math.abs(secB - secA);
-            if (diff > 43200) {
-                return secB > secA ? -1 : 1;
+            if (Math.abs(toSec(timeB) - toSec(timeA)) > 43200) {
+                return toSec(timeB) > toSec(timeA) ? -1 : 1;
             }
             return cmp;
         });
         state.roomData = allItems;
+        state.roomDataMonth = monthFilter || null;
         buildSearchIndex(state.roomData);
     }
 
@@ -741,10 +756,14 @@ const BarrageApp = (function() {
         let data = isSession ? state.allData : state.roomData;
         const indexKey = isSession ? 'session' : 'room';
 
-        if (!isSession && state.roomData.length === 0 && (state.filters.search || state.dateFilter)) {
-            await loadRoomData();
+        if (!isSession) {
+            const monthFilter = state.dateFilter && state.dateFilter.includes('-') ? state.dateFilter : null;
+            const needReload = state.roomData.length === 0 || state.roomDataMonth !== monthFilter;
+            if (needReload && (state.filters.search || state.dateFilter || state.roomDataMonth)) {
+                await loadRoomData(monthFilter);
+                showLoading(false);
+            }
             data = state.roomData;
-            showLoading(false);
         }
 
         if (state.filters.search) {
@@ -773,7 +792,7 @@ const BarrageApp = (function() {
             }
         }
 
-        if (state.dateFilter && !isSession) {
+        if (state.dateFilter && !isSession && state.dateFilter !== state.roomDataMonth) {
             data = data.filter(item => {
                 const session = item._session || '';
                 if (state.dateFilter.includes('-')) {
@@ -1089,7 +1108,7 @@ const BarrageApp = (function() {
 
     function handleSelectChange(selectId, value, option) {
         if (selectId === 'year-select') {
-            selectYear(value);
+            selectYearMonth(value);
             return;
         }
 

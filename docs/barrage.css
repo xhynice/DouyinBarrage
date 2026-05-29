@@ -228,6 +228,8 @@ body {
     top: 100%;
     left: 0;
     min-width: 100%;
+    max-height: 300px;
+    overflow-y: auto;
     background: var(--card-bg);
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -237,8 +239,21 @@ body {
     transform: translateY(-10px);
     transition: all 0.2s ease;
     z-index: 100;
-    overflow: hidden;
     border: 1px solid var(--border-color);
+}
+
+.custom-select-options::-webkit-scrollbar {
+    width: 6px;
+}
+.custom-select-options::-webkit-scrollbar-track {
+    background: transparent;
+}
+.custom-select-options::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+.custom-select-options::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
 }
 
 .custom-select.options-right .custom-select-options {
@@ -453,14 +468,6 @@ body {
     gap: 8px;
 }
 
-.ts-section .ts-rank {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 16px 4px 0;
-    font-size: 13px;
-}
-
 .ts-title {
     font-size: 14px;
     font-weight: 600;
@@ -469,11 +476,10 @@ body {
 }
 
 .ts-rank {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    flex-wrap: wrap;
     gap: 8px;
-    padding: 4px 0;
+    padding: 4px 16px 4px 0;
     font-size: 13px;
 }
 

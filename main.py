@@ -26,8 +26,6 @@ from service.fetcher import DouyinBarrage
 from base.utils import update_room_name_in_config
 from base.output import RoomLogFilter
 
-room = None
-instances = []
 _shutting_down = False
 _active_rooms = {}  # {room_id: {'instance': DouyinBarrage, 'thread': Thread, 'config': dict}}
 _active_rooms_lock = threading.Lock()
@@ -36,20 +34,18 @@ logger = logging.getLogger(__name__)
 
 
 def signal_handler(signum, frame):
-    """信号处理函数，优雅退出（单/多房间通用）"""
+    """信号处理函数，优雅退出"""
     global _shutting_down
     if _shutting_down:
         return
     _shutting_down = True
     print("\n【收到停止信号，正在优雅退出...】")
-    if instances:
-        for r in instances:
+    with _active_rooms_lock:
+        for entry in list(_active_rooms.values()):
             try:
-                r.stop()
+                entry['instance'].stop()
             except Exception:
                 pass
-    elif room:
-        room.stop()
 
 
 def show_usage():
@@ -60,22 +56,10 @@ def show_usage():
 
 选项:
   --log-level <级别>        覆盖日志级别 (DEBUG/INFO/WARNING/ERROR/NONE)
-  --live-end <行为>         直播结束行为: wait=等待重开播, stop=结束退出
+  --live-stop               直播结束后停止退出
+  --live-wait               直播结束后等待重开播
+  --all                     采集 rooms.txt 中全部未注释的房间
 """)
-
-
-def validate_live_id(live_id: str) -> bool:
-    """验证直播间 ID 格式。
-    
-    抖音直播间 ID 为 6-18 位纯数字。
-    
-    Args:
-        live_id: 直播间 ID 字符串。
-        
-    Returns:
-        True 表示格式有效，False 表示无效。
-    """
-    return bool(re.match(r'^\d{6,18}$', live_id))
 
 
 def load_rooms_from_config(rooms_file='rooms.txt'):
@@ -116,7 +100,7 @@ def load_rooms_from_config(rooms_file='rooms.txt'):
                 rid = parts[0].strip()
                 name = parts[1].strip() if len(parts) > 1 else ''
 
-                if not rid or not validate_live_id(rid) or rid in seen:
+                if not rid or rid in seen:
                     logger.warning(f"[配置] 跳过无效房间 ID: {rid}")
                     continue
                 seen.add(rid)
@@ -156,7 +140,7 @@ def run_room(room_cfg, log_level, live_stop):
     live_id = room_cfg['id']
 
     try:
-        instance = DouyinBarrage(live_id, log_level=log_level, on_room_info=_make_on_room_info(room_cfg), multi_room=True)
+        instance = DouyinBarrage(live_id, log_level=log_level, on_room_info=_make_on_room_info(room_cfg))
         with _active_rooms_lock:
             _active_rooms[live_id] = {'instance': instance, 'thread': threading.current_thread(), 'config': room_cfg}
 
@@ -341,8 +325,8 @@ def parse_user_input(user_input, rooms):
             return ('multi', rooms[:], [])
         return None, None, warnings
 
-    # 纯直播间ID（6-18位数字）
-    if validate_live_id(user_input):
+    # 纯直播间ID
+    if user_input.isdigit():
         return ('single', user_input, [])
 
     # 统一分隔符：逗号和空格都作为分隔符
@@ -373,7 +357,7 @@ def parse_user_input(user_input, rooms):
                 warnings.append(f"编号 {part} 超出范围（1-{len(rooms)}），已跳过")
         except ValueError:
             # 尝试作为直播间ID解析
-            if validate_live_id(part):
+            if part.isdigit():
                 if part not in seen:
                     seen.add(part)
                     selected_rooms.append({'id': part, 'name': ''})
@@ -458,50 +442,6 @@ def main_multi(room_list, log_level, live_stop):
 
 
 
-def start_single_room(live_id, log_level, live_stop, rooms=None):
-    """启动单房间采集。
-
-    Args:
-        live_id: 直播间ID
-        log_level: 日志级别
-        live_stop: 直播结束后是否停止退出 (bool)。
-        rooms: 已加载的房间列表（避免重复读取配置），为 None 时自动加载
-    """
-    
-    global room
-
-    print("=" * 45)
-    print("抖音直播间弹幕数据采集器")
-    print("=" * 45)
-    print(f"直播间 ID: {live_id}")
-    if log_level:
-        print(f"日志级别: {log_level}")
-    if live_stop is not None:
-        print(f"直播结束行为: {'结束退出' if live_stop else '等待重开播'}")
-    print("=" * 45)
-    print("按 Ctrl+C 停止采集\n")
-
-    # 从配置中查找该房间，用于判断 name 是否已存在
-    if rooms is None:
-        rooms = load_rooms_from_config()
-    room_cfg = next((r for r in rooms if r['id'] == live_id), {'id': live_id, 'name': ''})
-
-    room = DouyinBarrage(live_id, log_level=log_level, on_room_info=_make_on_room_info(room_cfg))
-    instances.append(room)
-
-    if live_stop is not None:
-        room.config['live_stop'] = live_stop
-
-    try:
-        room.start()
-    except KeyboardInterrupt:
-        print("\n【用户中断，停止采集】")
-        room.stop()
-    except Exception as e:
-        print(f"\n【采集失败: {e}】")
-        room.stop()
-        sys.exit(1)
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -509,7 +449,7 @@ def main():
         add_help=False,
     )
     parser.add_argument('live_id', nargs='?', help='直播间 ID（不提供则交互式选择）')
-    parser.add_argument('--log-level', choices=['DEBUG', 'BARRAGE', 'INFO', 'WARNING', 'ERROR', 'NONE'],
+    parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'NONE'],
                         help='覆盖日志级别')
     parser.add_argument('--live-stop', action='store_true',
                         help='直播结束后停止退出（默认跟随配置文件）')
@@ -542,18 +482,16 @@ def main():
         for r in rooms:
             if r.get('name'):
                 RoomLogFilter.update_anchor(r['id'], r['name'])
-        if len(rooms) == 1:
-            start_single_room(rooms[0]['id'], args.log_level, live_stop, rooms=rooms)
-        else:
-            main_multi(rooms, args.log_level, live_stop)
+        main_multi(rooms, args.log_level, live_stop)
         return
 
-    # 命令行直接指定了ID，单房间模式
+    # 命令行直接指定了ID，走统一的多房间入口（单房间也热加载）
     if args.live_id:
-        if not validate_live_id(args.live_id):
-            print(f"错误：无效的直播间 ID '{args.live_id}'（必须是 6-18 位纯数字）")
-            sys.exit(1)
-        start_single_room(args.live_id, args.log_level, live_stop)
+        rooms = load_rooms_from_config()
+        room_cfg = next((r for r in rooms if r['id'] == args.live_id), {'id': args.live_id, 'name': ''})
+        if room_cfg.get('name'):
+            RoomLogFilter.update_anchor(room_cfg['id'], room_cfg['name'])
+        main_multi([room_cfg], args.log_level, live_stop)
     else:
         # 交互式选择
         rooms = load_rooms_from_config()
@@ -575,25 +513,16 @@ def main():
                 if not live_id:
                     print("直播间 ID 不能为空")
                     continue
-                if not validate_live_id(live_id):
-                    print("错误：直播间 ID 必须是 6-18 位纯数字")
-                    continue
                 break
-            start_single_room(live_id, args.log_level, live_stop, rooms=rooms)
+            main_multi([{'id': live_id, 'name': ''}], args.log_level, live_stop)
             return
 
         def show_room_list():
             print("                 _.")
             print("               <(o  )  _,,,°")
             print("---------------(__''___) ---------------")
-            print("   弹幕采集器 04.27.2026 by NcieXHY'")
+            print("   弹幕采集器 by NcieXHY'")
             print("-----------------------------------------")
-
-
-            # print("=" * 45)
-            # print("抖音直播间弹幕数据采集器")
-            # print("=" * 45)
-            #print(f"已从配置加载 {len(rooms)} 个房间：\n")
             for i, r in enumerate(rooms, 1):
                 label = f"{r['id']}"
                 if r['name']:
@@ -632,13 +561,16 @@ def main():
                 show_input_help()
                 continue
             elif mode == 'single':
-                start_single_room(data, args.log_level, live_stop, rooms=rooms)
+                room_cfg = next((r for r in rooms if r['id'] == data), {'id': data, 'name': ''})
+                if room_cfg.get('name'):
+                    RoomLogFilter.update_anchor(room_cfg['id'], room_cfg['name'])
+                main_multi([room_cfg], args.log_level, live_stop)
                 break
             elif mode == 'multi':
-                if len(data) == 1:
-                    start_single_room(data[0]['id'], args.log_level, live_stop, rooms=rooms)
-                else:
-                    main_multi(data, args.log_level, live_stop)
+                for r in data:
+                    if r.get('name'):
+                        RoomLogFilter.update_anchor(r['id'], r['name'])
+                main_multi(data, args.log_level, live_stop)
                 break
             else:
                 # mode is None (空输入或全部无效)

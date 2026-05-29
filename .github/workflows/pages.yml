@@ -36,16 +36,21 @@ jobs:
         pip install -r requirements.txt
 
     - name: Build site data
-      run: python scripts/build_barrage.py
+      run: python docs/build_barrage.py
 
     - name: Commit built data to repo
+      continue-on-error: true
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add docs/data/ 2>/dev/null || true
-        git diff --quiet && git diff --staged --quiet || git commit -m "Update site data: $(date '+%Y-%m-%d %H:%M')"
-        git pull --rebase origin main
-        git push || echo "No changes to commit"
+        if git diff --staged --quiet; then
+          echo "无数据变化，跳过提交"
+        else
+          git commit -m "Update site data: $(date '+%Y-%m-%d %H:%M') [skip ci]"
+          git pull --rebase origin main
+          git push
+        fi
 
     - name: Prepare deployment directory
       run: |

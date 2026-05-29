@@ -4,15 +4,28 @@ on:
   workflow_dispatch:
     inputs:
       live_id:
-        description: '直播间ID (留空则使用rooms.txt第一个)'
+        description: '直播间ID (留空则采集rooms.txt全部房间)'
         required: false
         default: ''
+      live_stop:
+        description: '直播结束后行为'
+        required: false
+        default: 'stop'
+        type: choice
+        options:
+          - stop
+          - wait
+
+concurrency:
+  group: barrage-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    timeout-minutes: 120
     env:
       TZ: Asia/Shanghai
 
@@ -45,30 +58,26 @@ jobs:
           echo "未配置 COOKIE_TXT secret，将以游客身份采集"
         fi
 
-    - name: Get first live_id from rooms.txt
-      id: get-live-id
-      run: |
-        python -c "
-        import os
-        if os.path.exists('rooms.txt'):
-            with open('rooms.txt', 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith('#'):
-                        parts = line.split(',')
-                        if parts:
-                            print('live_id=' + parts[0].strip())
-                            break
-        " >> $GITHUB_OUTPUT
-
     - name: Run barrage collector
       run: |
-        live_id="${{ github.event.inputs.live_id || steps.get-live-id.outputs.live_id }}"
-        if [ -n "$live_id" ]; then
-          echo "采集直播间: $live_id"
-          python main.py "$live_id" --live-stop
+        LIVE_ID="${{ github.event.inputs.live_id }}"
+        LIVE_END="${{ github.event.inputs.live_stop || 'stop' }}"
+        # 安全校验：live_id 只允许数字
+        if [ -n "$LIVE_ID" ]; then
+          if ! [[ "$LIVE_ID" =~ ^[0-9]+$ ]]; then
+            echo "错误：直播间ID只能包含数字，收到: $LIVE_ID"
+            exit 1
+          fi
+          echo "采集指定直播间: $LIVE_ID"
+          ARGS="$LIVE_ID"
         else
-          echo "未找到直播间ID，跳过采集"
+          echo "采集 rooms.txt 全部房间"
+          ARGS="--all"
+        fi
+        if [ "$LIVE_END" = "wait" ]; then
+          python main.py $ARGS --live-wait
+        else
+          python main.py $ARGS --live-stop
         fi
       continue-on-error: true
 
@@ -82,10 +91,15 @@ jobs:
         retention-days: 3
 
     - name: Commit data to repo
+      continue-on-error: true
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add -f data/ logs/ 2>/dev/null || true
-        git diff --quiet && git diff --staged --quiet || git commit -m "Update barrage data: $(date '+%Y-%m-%d %H:%M')"
-        git pull --rebase origin main
-        git push
+        if git diff --staged --quiet; then
+          echo "无数据变化，跳过提交"
+        else
+          git commit -m "Update barrage data: $(date '+%Y-%m-%d %H:%M') [skip ci]"
+          git pull --rebase origin main
+          git push
+        fi

@@ -42,7 +42,7 @@ from base.utils import (
     generate_user_unique_id, extract_ua_version,
     rotate_ua,
 )
-from base.output import setup_logger, DataRecorder, ThroughputCounter, BARRAGE, RoomLogFilter, display_width, is_ci_environment
+from base.output import setup_logger, DataRecorder, ThroughputCounter, RoomLogFilter
 from service.network import (
     fetch_ttwid, enter_room_api, download_image,
     build_http_headers,
@@ -56,12 +56,25 @@ logger = logging.getLogger(__name__)
 class DouyinBarrage:
     """抖音直播间弹幕数据采集器。
 
-    通过 WebSocket 长连接实时获取 13 种消息类型，输出 CSV/JSONL。
+    通过 WebSocket 长连接实时获取 13 种消息类型，输出 CSV/SQLite。
     支持登录态、自动重连、等待开播、弱网容错。
 
     Attributes:
         _DEFAULT_CONFIG: 统一默认配置，与 config.yaml 做浅合并。
     """
+
+    # ── 硬编码常量 ──
+    HTTP_TIMEOUT = 15              # HTTP 超时（秒），超时后自动 ×1.5，封顶 60s，最多重试 3 次
+    WS_CONNECT_TIMEOUT = 30        # WebSocket 底层 socket 超时（秒）
+    SILENCE_TIMEOUT = 60           # 看门狗静默阈值（秒）
+    HEARTBEAT_INTERVAL = 10        # 心跳间隔（秒）
+    RCVBUF_KB = 512                # 接收缓冲区（KB）
+    MAX_RECONNECTS = 5             # 最大重连次数（0 = 无限）
+    RECONNECT_BASE_DELAY = 8       # 重连基础延迟（秒），指数退避：8s → 16s → 32s → ...
+    RECONNECT_MAX_DELAY = 120      # 最大重连延迟（秒），退避封顶
+    STATS_INTERVAL = 60            # 吞吐统计打印间隔（秒）
+
+    COOKIE_FILE = 'cookie.txt'     # Cookie 文件路径（硬编码）
 
     # 统一默认配置
     _DEFAULT_CONFIG = {
@@ -70,23 +83,18 @@ class DouyinBarrage:
             'chat': True, 'lucky_bag': True, 'gift': True, 'like': True,
             'member': True, 'social': True, 'rank': True, 'stats': True,
             'fansclub': True, 'emoji': True, 'room': True, 'roomstats': True,
-            'control': True, 'gift_combo_final': False,
-            'file_format': 'none', 'file_dir': 'data',
+            'control': True,
         },
-        'network': {
-            'http_timeout': 15, 'ws_connect_timeout': 30, 'silence_timeout': 60,
-            'heartbeat_interval': 10, 'rcvbuf_kb': 256, 'proxy': None,
+        'format': {
+            'gift_combo_final': False,
+            'csv': False, 'sqlite': False,
+            'file_dir': 'data',
         },
-        'max_reconnects': 0,
-        'reconnect_base_delay': 2,
-        'reconnect_max_delay': 120,
-        'stats_interval': 60,
-        'cookie_file': 'cookie.txt',
         'live_stop': False,
         'live_check_interval': 30,
     }
 
-    def __init__(self, live_id, config_file='config.yaml', log_level=None, on_room_info=None, multi_room=False):
+    def __init__(self, live_id, config_file='config.yaml', log_level=None, on_room_info=None):
         """初始化采集器。
 
         Args:
@@ -95,7 +103,6 @@ class DouyinBarrage:
             log_level: 日志级别覆盖（None 时使用配置文件中的值）。
             on_room_info: 可选回调，首次获取房间信息后调用。
                           签名: on_room_info(room_id: str, anchor_name: str)
-            multi_room: 多房间模式，控制台仅显示状态面板。
         """
         self._on_room_info = on_room_info
         # ── 配置 ──
@@ -106,24 +113,17 @@ class DouyinBarrage:
         self._logger, self._queue_handler = setup_logger(
             log_dir='logs',
             log_level=effective_level,
-            multi_room=multi_room,
         )
 
         self._enable_outputs = self.config.get('output', {})
+        self._format_cfg = self.config.get('format', {})
 
         # ── UA（一次选定，全局一致）──
         self._ua = random.choice(USER_AGENTS)
         self._ua_version = extract_ua_version(self._ua)
         self._user_unique_id = generate_user_unique_id()
 
-        # ── 网络超时参数 ──
-        net_cfg = self.config.get('network', {})
-        self._http_timeout = net_cfg.get('http_timeout', 15)
-        self._ws_connect_timeout = net_cfg.get('ws_connect_timeout', 30)
-        self._silence_timeout = net_cfg.get('silence_timeout', 60)
-        self._heartbeat_interval = net_cfg.get('heartbeat_interval', 10)
-        self._proxy = net_cfg.get('proxy', None)
-        self._rcvbuf = net_cfg.get('rcvbuf_kb', 256) * 1024
+        # 网络超时参数直接使用类常量
 
         # ── HTTP Session ──
         self.session = requests.Session()
@@ -131,13 +131,9 @@ class DouyinBarrage:
         self.session.mount('https://', adapter)
         self.session.mount('http://', adapter)
         self.session.headers.update(build_http_headers(self._ua, self._ua_version))
-        if self._proxy:
-            self.session.proxies.update(self._proxy)
-            logger.info(f"[启动] 使用代理: {self._proxy}")
 
-        # ── 登录 Cookie ──
-        self._cookie_file = self.config.get('cookie_file', 'cookie.txt')
-        self._login_cookies = load_cookies(self._cookie_file)
+        # ── 登录 Cookie（硬编码路径）──
+        self._login_cookies = load_cookies(self.COOKIE_FILE)
         if self._login_cookies:
             for name, value in self._login_cookies.items():
                 self.session.cookies.set(name, value, domain='.douyin.com')
@@ -179,8 +175,6 @@ class DouyinBarrage:
         # ── 数据记录器（首次连接后初始化）──
         self._recorder = None
 
-        # ── 统计定时打印 ──
-        self._stats_interval = self.config.get('stats_interval', 60)
 
         # ── 连接重试 ──
         self._reconnect_count = 0
@@ -234,7 +228,7 @@ class DouyinBarrage:
             return self._ttwid
         self._ttwid, self._login_info = fetch_ttwid(
             self.session, self.live_id,
-            self._login_cookies, self._http_timeout,
+            self._login_cookies, self.HTTP_TIMEOUT,
         )
         # 登录态判定
         has_cookie = bool(self._login_cookies.get('sessionid') or
@@ -285,7 +279,7 @@ class DouyinBarrage:
             return self._room_id
         self._room_info = enter_room_api(
             self.ttwid, self._ua, self._ua_version,
-            self.live_id, self._http_timeout, session=self.session,
+            self.live_id, self.HTTP_TIMEOUT, session=self.session,
         )
         self._room_id = self._room_info['room_id']
         status = self._room_info['status']
@@ -300,12 +294,11 @@ class DouyinBarrage:
         logger.info(f"[启动] live_id: {self.live_id}")
         logger.info(f"[启动] UA: {self._ua}")
         logger.info(f"[启动] user_unique_id: {self._user_unique_id}")
-        logger.info(f"[启动] 网络配置: http_timeout={self._http_timeout}s, "
-                     f"ws_connect_timeout={self._ws_connect_timeout}s, "
-                     f"silence_timeout={self._silence_timeout}s, "
-                     f"heartbeat_interval={self._heartbeat_interval}s, "
-                     f"rcvbuf={self._rcvbuf // 1024}KB"
-                     f"{', proxy=on' if self._proxy else ''}")
+        logger.info(f"[启动] 网络配置: http_timeout={self.HTTP_TIMEOUT}s, "
+                     f"ws_connect_timeout={self.WS_CONNECT_TIMEOUT}s, "
+                     f"silence_timeout={self.SILENCE_TIMEOUT}s, "
+                     f"heartbeat_interval={self.HEARTBEAT_INTERVAL}s, "
+                     f"rcvbuf={self.RCVBUF_KB}KB")
         self._connectWebSocket()
 
     def stop(self):
@@ -339,47 +332,6 @@ class DouyinBarrage:
         # 多实例共享 QueueHandler，不在此处关闭（由进程退出统一清理）
         # 单实例模式下 stop() 后进程通常也退出，无需显式关闭
 
-    # ── 状态消息 ──────────────────────────────────
-
-    def _state_json(self, event, live, message, **extra):
-        """生成结构化状态 JSON 字符串（供数据管道消费）。
-
-        Args:
-            event: 事件类型标识。
-            live: 是否直播中。
-            message: 人类可读的消息文本。
-            **extra: 额外字段（如 retry_interval_seconds）。
-
-        Returns:
-            JSON 字符串。
-        """
-        return json.dumps({
-            'type': 'system',
-            'event': event,
-            'live': live,
-            'room_id': self.live_id,
-            'anchor_name': self.anchor_name,
-            'message': message,
-            **extra,
-        }, ensure_ascii=False)
-
-    def _log_status(self, event, live, message, **extra):
-        """输出人类可读的状态日志 + 结构化 JSON。
-
-        Args:
-            event: 事件类型标识。
-            live: 是否直播中。
-            message: 人类可读的消息文本。
-            **extra: 额外字段（如 retry_interval_seconds）。
-
-        Returns:
-            JSON 字符串（同 _state_json）。
-        """
-        prefix = f"[直播状态] {self.anchor_name} " if self.anchor_name else "[直播状态] "
-        logger.info(f"{prefix}{message}"
-                    + (f" ({', '.join(f'{k}={v}' for k, v in extra.items())})" if extra else ''))
-        return self._state_json(event, live, message, **extra)
-
     # ── 等待开播 ──────────────────────────────────
 
     def _enter_wait_mode(self):
@@ -396,14 +348,11 @@ class DouyinBarrage:
         poll_interval = self.config.get('live_check_interval', 30)
         label = self.display_name
         logger.info(f'[控制] {label} 监测中（间隔 {poll_interval}s）')
-        if self._queue_handler.multi_room:
-            self._queue_handler.set_room_status(
-                self.live_id, 'waiting',
-                anchor=self.display_name,
-                interval=poll_interval,
-            )
-        else:
-            sys.stderr.write('\n')
+        self._queue_handler.set_room_status(
+            self.live_id, 'waiting',
+            anchor=self.display_name,
+            interval=poll_interval,
+        )
         self._counter = ThroughputCounter()
         self._reset_recorder()
         if self.ws:
@@ -434,13 +383,12 @@ class DouyinBarrage:
                 self._recorder.close()
             except Exception as e:
                 logger.debug(f"[数据] 关闭旧 recorder 异常: {e}")
-        self._recorder = DataRecorder(self.live_id, self.config)
+        self._recorder = DataRecorder(self.anchor_name, self.live_id, self.config)
 
     def _start_monitor_loop(self):
         """启动等待开播的监控循环（HTTP 轮询 + 状态通知）。
 
-        多房间模式：更新状态面板，由面板统一显示。
-        单房间模式：使用 \\r 动态光标动画。
+        更新状态面板，由面板统一显示。
         """
         if self._monitor_stop is not None:
             return
@@ -450,21 +398,17 @@ class DouyinBarrage:
         self._monitor_done = done_event
 
         poll_interval = self.config.get('live_check_interval', 30)
-        room_label = f'{self.anchor_name} ' if self.anchor_name else f'{self.live_id} '
-        is_multi = self._queue_handler.multi_room
 
         def loop():
             try:
-                # 等待初始化完成（如 on_room_info 回调），避免 \r 动画覆盖日志
                 stop_event.wait(0.3)
                 if stop_event.is_set() or self._stop_event.is_set():
                     return
-                start_time = time.time()
                 while not stop_event.is_set() and not self._stop_event.is_set():
                     try:
                         info = enter_room_api(
                             self.ttwid, self._ua, self._ua_version,
-                            self.live_id, self._http_timeout, session=self.session,
+                            self.live_id, self.HTTP_TIMEOUT, session=self.session,
                         )
                         if info['status'] == 2:
                             self._room_id = info['room_id']
@@ -477,43 +421,17 @@ class DouyinBarrage:
                             logger.warning(f'[监控] 检测到认证异常，强制刷新 ttwid')
                             self._ttwid = None
 
-                    if is_multi:
-                        # 多房间：更新状态面板
-                        self._queue_handler.set_room_status(
-                            self.live_id, 'waiting',
-                            anchor=self.display_name,
-                            interval=poll_interval,
-                        )
-                        # 分段等待
-                        for _ in range(int(poll_interval / 0.5)):
-                            if stop_event.is_set() or self._stop_event.is_set():
-                                break
-                            time.sleep(0.5)
-                    else:
-                        for _ in range(int(poll_interval / 0.5)):
-                            if stop_event.is_set() or self._stop_event.is_set():
-                                break
-                            elapsed = time.time() - start_time
-                            remaining = max(0, int(poll_interval - elapsed))
-                            cursor = '|' if int(elapsed * 2) % 2 == 0 else ' '
-                            text = f'[等待开播] {room_label}轮询中{cursor} {remaining}s'
-                            old_len = self._queue_handler._polling_len
-                            pad = max(old_len - display_width(text), 0)
-                            if is_ci_environment():
-                                print(text)
-                            else:
-                                sys.stderr.write('\r' + text + ' ' * pad)
-                                sys.stderr.flush()
-                            self._queue_handler._polling_len = display_width(text)
-                            time.sleep(0.5)
-                    start_time = time.time()
+                    self._queue_handler.set_room_status(
+                        self.live_id, 'waiting',
+                        anchor=self.display_name,
+                        interval=poll_interval,
+                    )
+                    for _ in range(int(poll_interval / 0.5)):
+                        if stop_event.is_set() or self._stop_event.is_set():
+                            break
+                        time.sleep(0.5)
             finally:
-                if is_multi:
-                    self._queue_handler.clear_room_status(self.live_id)
-                else:
-                    if not is_ci_environment():
-                        sys.stderr.write('\r' + ' ' * self._queue_handler._polling_len + '\r')
-                    self._queue_handler._polling_len = 0
+                self._queue_handler.clear_room_status(self.live_id)
                 done_event.set()
                 if self._monitor_stop is stop_event:
                     self._monitor_stop = None
@@ -568,9 +486,9 @@ class DouyinBarrage:
         4. 切换 UA（降低风控）
         5. 指数退避延迟（base × 2^n，封顶 max_delay + 随机抖动）
         """
-        max_reconnects = self.config.get('max_reconnects', 0)
-        base_delay = self.config.get('reconnect_base_delay', 2)
-        max_delay = self.config.get('reconnect_max_delay', 120)
+        max_reconnects = self.MAX_RECONNECTS
+        base_delay = self.RECONNECT_BASE_DELAY
+        max_delay = self.RECONNECT_MAX_DELAY
         self._reconnect_count = 0
 
         while not self._stop_event.is_set():
@@ -581,7 +499,7 @@ class DouyinBarrage:
                 self._room_id = None
                 info = enter_room_api(
                     self.ttwid, self._ua, self._ua_version,
-                    self.live_id, self._http_timeout, session=self.session,
+                    self.live_id, self.HTTP_TIMEOUT, session=self.session,
                 )
                 self._room_id = info['room_id']
                 self._room_info = info
@@ -690,10 +608,10 @@ class DouyinBarrage:
                 # 临时设置全局 socket 超时，确保 TCP connect 不会无限阻塞
                 # run_forever 内部通过 getdefaulttimeout() 获取此值
                 old_timeout = getdefaulttimeout()
-                setdefaulttimeout(self._ws_connect_timeout)
+                setdefaulttimeout(self.WS_CONNECT_TIMEOUT)
                 try:
                     self.ws.run_forever(
-                    sockopt=((SOL_SOCKET, SO_RCVBUF, self._rcvbuf),),
+                    sockopt=((SOL_SOCKET, SO_RCVBUF, (self.RCVBUF_KB * 1024)),),
                     ping_interval=30,
                     ping_timeout=10,
                     origin='https://live.douyin.com',
@@ -737,15 +655,14 @@ class DouyinBarrage:
             self._stop_event.wait(timeout=delay)
 
         logger.info("[控制] 采集主循环退出")
-        if self._queue_handler.multi_room:
-            self._queue_handler.clear_room_status(self.live_id)
+        self._queue_handler.clear_room_status(self.live_id)
 
     # ── 心跳 / 看门狗 / 统计 ─────────────────────
 
     def _heartbeat_loop(self):
         """心跳线程，每 heartbeat_interval 秒发送二进制心跳包。"""
         conn_stop = self._conn_stop   # 缓存到局部变量，防止 _wsOnOpen 替换后旧线程不退出
-        interval = max(self._heartbeat_interval, 3)
+        interval = max(self.HEARTBEAT_INTERVAL, 3)
         while not conn_stop.is_set() and not self._stop_event.is_set():
             try:
                 if self._connected_event.is_set():
@@ -765,8 +682,8 @@ class DouyinBarrage:
         完全无数据：使用 silence_timeout 配置
         """
         conn_stop = self._conn_stop
-        check_interval = max(min(self._silence_timeout // 3, 10), 3)
-        logger.debug(f"[看门狗] 线程启动，检查间隔={check_interval}s，超时阈值={self._silence_timeout}s")
+        check_interval = max(min(self.SILENCE_TIMEOUT // 3, 10), 3)
+        logger.debug(f"[看门狗] 线程启动，检查间隔={check_interval}s，超时阈值={self.SILENCE_TIMEOUT}s")
         watchdog_start = time.time()
         first_check_done = False
         first_check_timeout = 3.0
@@ -776,7 +693,7 @@ class DouyinBarrage:
                 conn_stop.wait(timeout=check_interval)
                 if not self._connected_event.is_set():
                     elapsed = time.time() - watchdog_start
-                    if elapsed > self._silence_timeout:
+                    if elapsed > self.SILENCE_TIMEOUT:
                         logger.warning(f"[看门狗] 连接建立超时 ({elapsed:.0f}s)，强制重连")
                         try:
                             if self.ws and self.ws.sock:
@@ -792,8 +709,8 @@ class DouyinBarrage:
                 with self._last_msg_time_lock:
                     silence = time.time() - self._last_msg_time
                 logger.debug(f"[看门狗] 静默时间: {silence:.0f}s")
-                if silence > self._silence_timeout:
-                    logger.warning(f"[看门狗] {silence:.0f}s 无数据 (阈值={self._silence_timeout}s)，触发重连")
+                if silence > self.SILENCE_TIMEOUT:
+                    logger.warning(f"[看门狗] {silence:.0f}s 无数据 (阈值={self.SILENCE_TIMEOUT}s)，触发重连")
                     try:
                         self.ws.keep_running = False
                         if self.ws.sock:
@@ -842,7 +759,7 @@ class DouyinBarrage:
         """统计线程，每 stats_interval 秒打印吞吐量报告。"""
         conn_stop = self._conn_stop
         while not conn_stop.is_set() and not self._stop_event.is_set():
-            conn_stop.wait(timeout=self._stats_interval)
+            conn_stop.wait(timeout=self.STATS_INTERVAL)
             if self._connected_event.is_set() and not self._is_waiting_live():
                 logger.info(f"[统计] {self._counter.report()}")
 
@@ -853,8 +770,9 @@ class DouyinBarrage:
         if not self._room_info:
             return
 
-        file_dir = self.config.get('output', {}).get('file_dir', 'data')
-        room_dir = os.path.join(file_dir, self.live_id)
+        file_dir = self._format_cfg.get('file_dir', 'data')
+        dir_name = DataRecorder._sanitize_dir_name(self.anchor_name) or self.live_id
+        room_dir = os.path.join(file_dir, dir_name)
         meta_file = os.path.join(room_dir, 'meta.json')
 
         if os.path.exists(meta_file):
@@ -865,6 +783,7 @@ class DouyinBarrage:
 
             meta = {
                 'live_id': self.live_id,
+                'anchor_name': self.anchor_name,
                 **self._room_info,
                 'saved_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             }
@@ -873,11 +792,11 @@ class DouyinBarrage:
                 json.dump(meta, f, ensure_ascii=False, indent=2)
             logger.info(f"[数据] 主播信息已保存: {meta_file}")
 
-            if download_image(self.session, self._room_info['anchor_avatar'],
+            if download_image(self.session, self._room_info.get('anchor_avatar', ''),
                               os.path.join(room_dir, 'avatar.jpg')):
                 logger.info(f"[数据] 主播头像已下载")
 
-            if download_image(self.session, self._room_info['room_cover'],
+            if download_image(self.session, self._room_info.get('room_cover', ''),
                               os.path.join(room_dir, 'cover.jpg')):
                 logger.info(f"[数据] 直播间封面已下载")
         except Exception as e:
@@ -897,8 +816,9 @@ class DouyinBarrage:
         # 这样看门狗能正确检测"连接成功但无业务消息"的假活状态
         self._ws_connected_at = time.time()  # 连接建立时间，看门狗用于计算业务沉默
 
-        # 预计算 enable_outputs（每连接一次，避免每条消息拷贝）
+        # 预计算 parser 配置（消息开关 + 格式/行为配置，每连接刷新一次）
         self._eo_cached = dict(self._enable_outputs)
+        self._eo_cached['gift_combo_final'] = self._format_cfg.get('gift_combo_final', False)
         self._eo_cached['live_stop'] = self.config.get('live_stop', False)
 
         # 停止旧连接的线程，重建连接级停止信号
@@ -922,12 +842,10 @@ class DouyinBarrage:
         self._stats_thread = threading.Thread(target=self._stats_loop, daemon=True, name='stats')
         self._stats_thread.start()
 
-        # 提前初始化 recorder，避免首批消息（如统计、排行榜）因 recorder 未就绪而丢失
-        # 注意：recorder 采用延迟初始化策略 —— __init__ 中不创建，直到首次连接成功才 open()
-        # 因为 open() 需要 room_id（来自 enter_room_api），而首次调用可能因网络延迟失败
+        # 初始化 recorder（此时 anchor_name 已通过 enter_room_api 获取）
         if self._recorder is None:
-            self._recorder = DataRecorder(self.live_id, self.config)
-        self._recorder.open(self.room_id)
+            self._recorder = DataRecorder(self.anchor_name, self.live_id, self.config)
+        self._recorder.open()
 
         # 首次连接时保存主播信息和下载图片
         self._save_room_info()
@@ -1035,7 +953,7 @@ class DouyinBarrage:
                         # 日志 + 记录
                         msg_text = r.get('msg', '')
                         if msg_text:
-                            logger.log(BARRAGE, msg_text)
+                            logger.debug(msg_text)
 
                         rec_type = r.get('type', '')
                         rec_data = r.get('data')

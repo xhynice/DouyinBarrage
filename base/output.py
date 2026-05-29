@@ -1,52 +1,23 @@
-"""输出模块：异步日志、数据记录（CSV / JSONL / SQLite 批量写入）、吞吐统计。
+"""输出模块：异步日志、数据记录（CSV / SQLite 批量写入）、吞吐统计。
 
 日志通过 QueueHandler + deque 异步写出，避免阻塞主线程的消息处理。
 数据记录器支持延迟创建 CSV 文件（无数据不产生空文件）。
 
-多房间模式：通过 RoomLogFilter 自动根据线程名添加 [主播名] 前缀，
-使并发采集时的日志可区分来源。多房间时控制台仅显示 WARNING/ERROR
-和状态面板，INFO/DEBUG 仅写入文件。
+控制台仅显示 WARNING/ERROR 和状态面板，INFO/DEBUG 仅写入文件。
 """
 
 import csv
-import json
 import logging
+import logging.handlers
 import os
+import re
 import sqlite3
 import sys
 import threading
 import time
-import unicodedata
 from collections import deque
 
 from base.utils import SCRIPT_DIR
-
-
-def is_ci_environment():
-    """检测是否在 CI 环境中运行（GitHub Actions 等）。
-
-    CI 环境不支持 \\r 回到行首，需要禁用单行刷新输出。
-    """
-    return bool(os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'))
-
-
-def display_width(s: str) -> int:
-    """计算字符串在终端中的显示列宽（处理 CJK / emoji 等宽字符）。"""
-    width = 0
-    for ch in s:
-        w = unicodedata.east_asian_width(ch)
-        if w in ('F', 'W'):
-            width += 2
-        elif w == 'A':
-            width += 2
-        elif unicodedata.category(ch) == 'Cs':
-            width += 2
-        else:
-            width += 1
-    return width
-
-BARRAGE = 15
-logging.addLevelName(BARRAGE, 'BARRAGE')
 
 
 class RoomLogFilter(logging.Filter):
@@ -72,16 +43,8 @@ class RoomLogFilter(logging.Filter):
             record.msg = f"[{label}] {record.msg}"
         return True
 
-class BarragePassFilter(logging.Filter):
-    """仅在 DEBUG / BARRAGE 级别显示弹幕，其余级别隐藏。"""
-    def __init__(self, user_level):
-        super().__init__()
-        self._user_level = user_level
 
-    def filter(self, record):
-        if record.levelno == BARRAGE:
-            return self._user_level in (logging.DEBUG, BARRAGE)
-        return record.levelno >= self._user_level
+
 
 class QueueHandler(logging.Handler):
     
@@ -90,10 +53,8 @@ class QueueHandler(logging.Handler):
     内部使用 maxlen=50000 的 deque 做缓冲，溢出时丢弃新日志并
     在下次刷新时输出丢弃计数。后台线程每 2s 刷新一次。
 
-    多房间模式 (multi_room=True)：
-        - WARNING/ERROR 输出到控制台，INFO/DEBUG 仅写文件
-        - 状态面板通过 \\r 单行轮显，每次显示一个房间
-        - 每 2s 刷新一次，覆盖所有房间状态
+    - WARNING/ERROR 输出到控制台，INFO/DEBUG 仅写文件
+    - 状态面板每 2s 刷新一次，显示所有房间状态
     """
 
     def __init__(self):
@@ -103,14 +64,10 @@ class QueueHandler(logging.Handler):
         self._stop = threading.Event()
         self._dropped = 0
         self._thread = None
-        # ── 多房间状态面板 ──
+        # ── 状态面板 ──
         self._room_status = {}      # {live_id: {status, anchor, ...}}
         self._status_lock = threading.Lock()
-        self._panel_idx = 0         # (保留，兼容性)
-        self.multi_room = False     # 由外部设置
         self._shutting_down = False # 退出时设为 True，抑制面板渲染
-        self._panel_max_len = 0    # 历史最大面板长度，用于精确清除
-        self._polling_len = 0
 
     def _ensure_started(self):
         """首次添加 handler 时启动后台刷新线程（幂等）。"""
@@ -144,8 +101,7 @@ class QueueHandler(logging.Handler):
     def _drain(self):
         """从缓冲区取出最多 500 条日志，分发到所有下游 handler。
 
-        多房间模式：WARNING/ERROR 输出到控制台，INFO/DEBUG 仅写文件。
-        单房间模式：所有消息写入所有 handler（保持原有行为）。
+        WARNING/ERROR 输出到控制台，INFO/DEBUG 仅写文件。
         """
         batch = []
         while len(batch) < 500:
@@ -155,23 +111,10 @@ class QueueHandler(logging.Handler):
                 break
 
         for h in self._handlers:
-            is_console = type(h) is logging.StreamHandler
             for r in batch:
                 try:
                     if r.levelno < h.level:
                         continue
-                    if self.multi_room and is_console:
-                        if not is_ci_environment():
-                            try:
-                                sys.stderr.write('\r' + ' ' * self._panel_max_len + '\r')
-                            except OSError:
-                                pass
-                    elif is_console and self._polling_len > 0:
-                        if not is_ci_environment():
-                            try:
-                                sys.stderr.write('\r' + ' ' * self._polling_len + '\r')
-                            except OSError:
-                                pass
                     h.emit(r)
                 except Exception:
                     pass
@@ -180,9 +123,8 @@ class QueueHandler(logging.Handler):
             except Exception:
                 pass
 
-        # 多房间：刷新状态面板（即使 batch 为空也要刷新，确保面板持续更新）
-        if self.multi_room:
-            self._render_panel()
+        # 刷新状态面板（即使 batch 为空也要刷新，确保面板持续更新）
+        self._render_panel()
 
         if self._dropped:
             for h in self._handlers:
@@ -222,7 +164,7 @@ class QueueHandler(logging.Handler):
             self._room_status.pop(live_id, None)
 
     def _render_panel(self):
-        """用 \\r 单行轮显房间状态，每次刷新显示一个房间。超过 5 分钟未更新的条目自动清除。"""
+        """打印状态面板，显示所有房间状态。超过 5 分钟未更新的条目自动清除。"""
         if self._shutting_down:
             return
         now = time.monotonic()
@@ -236,36 +178,30 @@ class QueueHandler(logging.Handler):
         if not items:
             return
 
-        self._panel_idx = self._panel_idx % len(items)
-        live_id, info = items[self._panel_idx]
-        anchor = info.get('anchor', '?')
-        st = info.get('status', 'unknown')
-        if st == 'waiting':
-            interval = info.get('interval', 30)
-            updated = info.get('_updated', now)
-            remaining = max(0, interval - int(now - updated))
-            text = f'{anchor} 等待({remaining}s)'
-        elif st == 'collecting':
-            count = info.get('msg_count', 0)
-            elapsed = info.get('elapsed', 0)
-            rate = count / elapsed if elapsed > 0 else 0
-            text = f'{anchor} {count}条({rate:.1f}m/s)'
-        else:
-            text = f'{anchor} {st}'
-
-        if len(items) > 1:
-            text = f'[{self._panel_idx + 1}/{len(items)}] {text}'
-
-        self._panel_idx += 1
-        new_len = display_width(text)
-        pad = max(self._panel_max_len - new_len, 0)
-        self._panel_max_len = max(self._panel_max_len, new_len)
-        try:
-            if is_ci_environment():
-                print(text)
+        # 构建每个房间的状态片段
+        parts = []
+        for live_id, info in items:
+            anchor = info.get('anchor', '?')
+            st = info.get('status', 'unknown')
+            if st == 'waiting':
+                interval = info.get('interval', 30)
+                updated = info.get('_updated', now)
+                remaining = max(0, interval - int(now - updated))
+                parts.append(f'{anchor} 等待({remaining}s)')
+            elif st == 'collecting':
+                count = info.get('msg_count', 0)
+                elapsed = info.get('elapsed', 0)
+                rate = count / elapsed if elapsed > 0 else 0
+                parts.append(f'{anchor} {count}条({rate:.1f}m/s)')
             else:
-                sys.stderr.write('\r' + text + ' ' * pad)
-                sys.stderr.flush()
+                parts.append(f'{anchor} {st}')
+
+        line1 = f'[采集 {len(items)} 房] ' + ' | '.join(parts)
+        sep = '-' * 50
+
+        try:
+            print(line1)
+            print(sep)
         except OSError:
             pass
 
@@ -283,19 +219,16 @@ class QueueHandler(logging.Handler):
         super().close()
 
 
-def setup_logger(log_dir='logs', log_level='INFO', multi_room=False):
+def setup_logger(log_dir='logs', log_level='INFO'):
     """配置全局 logger，返回 (logger, queue_handler)。
 
     日志级别为 NONE 时关闭日志输出，但数据文件照常写入。
-    同时输出到控制台和按日期命名的日志文件。
-
-    多房间模式下，首次调用创建 handler，后续调用复用已有 handler，
-    仅更新日志级别（取最低级别），不重复添加 handler。
+    控制台仅显示 WARNING/ERROR，INFO/DEBUG 仅写文件。
+    首次调用创建 handler，后续调用复用已有 handler，仅更新日志级别。
 
     Args:
         log_dir: 日志文件输出目录。
         log_level: 日志级别，'NONE' 表示关闭日志。
-        multi_room: 多房间模式，控制台仅显示状态面板，日志仅写文件。
 
     Returns:
         (logging.Logger, QueueHandler) 元组。
@@ -303,46 +236,44 @@ def setup_logger(log_dir='logs', log_level='INFO', multi_room=False):
     logger = logging.getLogger()
     log_enabled = log_level.upper() != 'NONE'
     level_name = log_level.upper()
-    if level_name == 'BARRAGE':
-        user_level = BARRAGE
-    else:
-        user_level = getattr(logging, level_name, logging.INFO)
+    user_level = getattr(logging, level_name, logging.INFO)
 
     # 多实例安全：如果已有 handler，说明其他实例已初始化，复用即可
     if logger.handlers:
         if log_enabled:
             current = logger.level or logging.CRITICAL
-            if min(user_level, BARRAGE) < current:
-                logger.setLevel(min(user_level, BARRAGE))
+            if user_level < current:
+                logger.setLevel(user_level)
         for h in logger.handlers:
             if isinstance(h, QueueHandler):
                 if not any(isinstance(f, RoomLogFilter) for f in h.filters):
                     h.addFilter(RoomLogFilter())
-                if multi_room:
-                    h.multi_room = True
-                    for sh in h._handlers:
-                        if isinstance(sh, logging.StreamHandler) and not isinstance(sh, logging.FileHandler):
-                            sh.setLevel(min(logging.WARNING, user_level))
+                for sh in h._handlers:
+                    if isinstance(sh, logging.StreamHandler) and not isinstance(sh, logging.FileHandler):
+                        sh.setLevel(min(logging.WARNING, user_level))
                 return logger, h
         queue_handler = QueueHandler()
-        queue_handler.multi_room = multi_room
         queue_handler.addFilter(RoomLogFilter())
         logger.addHandler(queue_handler)
         return logger, queue_handler
 
     if log_enabled:
-        logger.setLevel(min(user_level, BARRAGE))
+        logger.setLevel(user_level)
     else:
         logger.setLevel(logging.CRITICAL + 1)
 
     queue_handler = QueueHandler()
-    queue_handler.multi_room = multi_room
     queue_handler.addFilter(RoomLogFilter())
 
     if log_enabled:
         os.makedirs(log_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, time.strftime('%Y-%m-%d') + '.log')
-        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        log_file = os.path.join(log_dir, 'barrage.log')
+        file_handler = logging.handlers.RotatingFileHandler(
+            log_file,
+            maxBytes=5 * 1024 * 1024,   # 5MB 轮转
+            backupCount=3,               # 保留 3 个备份
+            encoding='utf-8',
+        )
         file_handler.setFormatter(logging.Formatter(
             '[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%m-%d %H:%M'
         ))
@@ -351,7 +282,6 @@ def setup_logger(log_dir='logs', log_level='INFO', multi_room=False):
     console = logging.StreamHandler()
     console.setFormatter(logging.Formatter('%(message)s'))
     console.setLevel(user_level)
-    console.addFilter(BarragePassFilter(user_level))
     queue_handler.add_handler(console)
 
     logger.addHandler(queue_handler)
@@ -406,11 +336,11 @@ class ThroughputCounter:
 
 
 class DataRecorder:
-    """数据记录器，支持 CSV、JSONL、SQLite 三格式批量写入。
+    """数据记录器，支持 CSV、SQLite 两格式批量写入。
 
     生命周期：构造 → open() → record() × N → close()
     CSV 文件延迟创建：首次收到某类型数据时才创建文件并写入表头。
-    SQLite 数据库位于房间级目录（data/{live_id}/barrage.db），跨会话追加。
+    SQLite 数据库位于主播目录（data/{主播名}/data.db），跨会话追加。
     SQLite 的 time 字段存为 Unix 秒级时间戳（INTEGER），用于视频+弹幕同步。
     后台线程每 2s 刷新一次缓冲区（deque 10 万上限，溢出丢弃）。
 
@@ -448,39 +378,27 @@ class DataRecorder:
         'room':     {'room_id'},
     }
 
-    @staticmethod
-    def _parse_fmts(raw):
-        """解析 file_format 配置值为格式集合。
-
-        支持：空字符串 / 'none' → 空集（不保存）；
-        'csv json sqlite' → {'csv', 'json', 'sqlite'}。
-        空格或逗号分隔，大小写不敏感。
-        """
-        if not raw:
-            return set()
-        raw = str(raw).strip().lower()
-        if not raw or raw == 'none':
-            return set()
-        return {t.strip() for t in raw.replace(',', ' ').split() if t.strip()}
-
-    def __init__(self, live_id: str, config: dict):
+    def __init__(self, anchor_name: str, live_id: str, config: dict):
         self.live_id = live_id
+        self._anchor_name = anchor_name
         output_cfg = config.get('output', {})
-        self._fmts = self._parse_fmts(output_cfg.get('file_format', ''))
+        fmt_cfg = config.get('format', {})
+        self._fmts = set()
+        if fmt_cfg.get('csv', False):
+            self._fmts.add('csv')
+        if fmt_cfg.get('sqlite', False):
+            self._fmts.add('sqlite')
         self._enable_outputs = output_cfg
-        self._base_dir = output_cfg.get('file_dir', os.path.join(SCRIPT_DIR, 'data'))
-        self._dir = self._base_dir                # CSV/JSONL 会话目录，open() 中更新
+        self._base_dir = fmt_cfg.get('file_dir', os.path.join(SCRIPT_DIR, 'data'))
+        self._dir = self._base_dir                # CSV 会话目录，open() 中更新
         self._live_dir = None                     # SQLite 房间目录，open() 中设置
 
-        self._json_bufs = {}
         self._csv_bufs = {}
         self._csv_writers = {}
         self._csv_fps = {}
-        self._json_fps = {}
         self._db = None
         self._sqlite_bufs = {}
         self._sqlite_stmts = {}      # {msg_type: sql} prepared statement 缓存
-        self._room_id = None
         self._lock = threading.Lock()
         self._record_lock = threading.Lock()
         self._stop = threading.Event()
@@ -488,27 +406,29 @@ class DataRecorder:
         self._dropped = 0
         self._opened = False
 
-    def open(self, room_id: str):
-        """初始化记录器，创建输出目录和 JSONL 文件（CSV 延迟创建）。
+    @staticmethod
+    def _sanitize_dir_name(name: str) -> str:
+        """清理目录名中的非法字符。"""
+        return re.sub(r'[\/\\\:\*\？?\"\<\>\|\s]', '', name).strip()
 
-        SQLite 数据库位于房间级目录（data/{live_id}/barrage.db），跨会话追加。
-        CSV/JSONL 文件位于会话级目录（data/{live_id}/{ts}_{room_id}/），每次独立。
+    def open(self):
+        """初始化记录器，创建输出目录。
 
-        Args:
-            room_id: 直播间真实 room_id，用于文件命名。
+        目录结构：data/{主播名}/{yyyy-MM-dd_HH-mm-ss}/
+        SQLite 数据库位于主播目录下，跨会话追加。
         """
         if self._opened or not self._fmts:
             return
-        self._room_id = room_id
-        self._ts = time.strftime('%Y%m%d_%H%M%S')
+        self._ts = time.strftime('%Y%m%d_%H%M')
 
-        # 房间级目录：SQLite 始终写到这里
-        self._live_dir = os.path.join(self._base_dir, self.live_id)
+        # 房间级目录：主播名
+        dir_name = self._sanitize_dir_name(self._anchor_name) or self.live_id
+        self._live_dir = os.path.join(self._base_dir, dir_name)
 
-        # 会话级目录：CSV/JSONL 写到这里
-        needs_session_dir = ('csv' in self._fmts or 'json' in self._fmts)
+        # 会话级目录
+        needs_session_dir = 'csv' in self._fmts
         if needs_session_dir:
-            self._dir = os.path.join(self._live_dir, f"{self._ts}_{room_id}")
+            self._dir = os.path.join(self._live_dir, self._ts)
             os.makedirs(self._dir, exist_ok=True)
         else:
             self._dir = self._live_dir
@@ -520,7 +440,7 @@ class DataRecorder:
         self._flush_thread = threading.Thread(target=self._bg_flush_loop, daemon=True, name='recorder-flush')
         self._flush_thread.start()
         self._opened = True
-        logger.info(f"[数据] 就绪: room_id={room_id}, 格式={','.join(sorted(self._fmts))}")
+        logger.info(f"[数据] 就绪: {self._anchor_name or self.live_id}, 格式={','.join(sorted(self._fmts))}")
 
     def _ensure_csv(self, msg_type: str):
         """首次收到某类型数据时创建对应的 CSV 文件并写入表头。"""
@@ -537,14 +457,6 @@ class DataRecorder:
         self._csv_writers[msg_type] = writer
         self._csv_bufs[msg_type] = deque(maxlen=100_000)
 
-    def _ensure_json(self, msg_type: str):
-        """首次收到某类型数据时创建对应的 JSONL 文件。"""
-        if msg_type in self._json_fps:
-            return
-        path = os.path.join(self._dir, f"{msg_type}.jsonl")
-        self._json_fps[msg_type] = open(path, 'a', encoding='utf-8')
-        self._json_bufs[msg_type] = deque(maxlen=100_000)
-
     # ── SQLite ────────────────────────────────────
 
     def _open_db(self):
@@ -553,7 +465,7 @@ class DataRecorder:
         WAL 模式允许读写并发，synchronous=NORMAL 在 WAL 下仍保证数据安全。
         cache_size=-8000 给予 8MB 页缓存，减少磁盘 I/O。
         """
-        db_path = os.path.join(self._live_dir, 'barrage.db')
+        db_path = os.path.join(self._live_dir, 'data.db')
         self._db = sqlite3.connect(db_path, check_same_thread=False)
         self._db.execute('PRAGMA journal_mode=WAL')
         self._db.execute('PRAGMA synchronous=NORMAL')
@@ -649,14 +561,6 @@ class DataRecorder:
                     if len(buf) >= buf.maxlen:
                         self._dropped += 1
                     buf.append(data)
-            if 'json' in self._fmts:
-                if msg_type not in self._json_bufs:
-                    self._ensure_json(msg_type)
-                buf = self._json_bufs.get(msg_type)
-                if buf is not None:
-                    if len(buf) >= buf.maxlen:
-                        self._dropped += 1
-                    buf.append(data)
             if 'sqlite' in self._fmts:
                 buf = self._sqlite_bufs.setdefault(msg_type, deque(maxlen=100_000))
                 if len(buf) >= buf.maxlen:
@@ -695,13 +599,12 @@ class DataRecorder:
         return batches
 
     def _do_flush(self):
-        """执行一次批量刷新：CSV、JSONL、SQLite 各取最多 5000 条写出。"""
+        """执行一次批量刷新：CSV、SQLite 各取最多 5000 条写出。"""
         if 'sqlite' in self._fmts:
             self._flush_sqlite()
 
         with self._lock:
             csv_batches = self._drain_bufs(self._csv_bufs)
-            json_batches = self._drain_bufs(self._json_bufs)
 
         for msg_type, batch in csv_batches.items():
             writer = self._csv_writers.get(msg_type)
@@ -725,22 +628,6 @@ class DataRecorder:
                             buf.appendleft(row)
                 logger.warning(f"[数据] CSV 写入异常，{len(batch) - failed_idx} 条数据已回退")
 
-        for msg_type, batch in json_batches.items():
-            fp = self._json_fps.get(msg_type)
-            if not fp:
-                continue
-            try:
-                lines = [json.dumps(d, ensure_ascii=False) for d in batch]
-                fp.write('\n'.join(lines) + '\n')
-                fp.flush()
-            except Exception:
-                with self._record_lock:
-                    buf = self._json_bufs.get(msg_type)
-                    if buf is not None:
-                        for d in reversed(batch):
-                            buf.appendleft(d)
-                logger.warning(f"[数据] JSONL 写入异常，{len(batch)} 条数据已回退")
-
     def close(self):
         """停止后台线程，刷新剩余数据，关闭所有句柄。"""
         if not self._opened:
@@ -753,11 +640,6 @@ class DataRecorder:
                 logger.warning("[数据] 刷新线程未在 5 秒内退出，跳过最终刷新")
         self._do_flush()
         for fp in self._csv_fps.values():
-            try:
-                fp.close()
-            except Exception:
-                pass
-        for fp in self._json_fps.values():
             try:
                 fp.close()
             except Exception:

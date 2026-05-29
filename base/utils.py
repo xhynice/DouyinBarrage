@@ -80,7 +80,7 @@ _last_ua_switch_time = 0.0
 def load_config(config_file, default_config):
     """加载 YAML 配置文件，与默认配置做浅合并。
 
-    字典类型的配置项（如 output、network）做一层嵌套合并，
+    字典类型的配置项（如 output）做一层嵌套合并，
     非字典类型直接覆盖。文件不存在时返回默认配置。
 
     Args:
@@ -330,23 +330,6 @@ def fmt_grade(user):
         if user.pay_grade and user.pay_grade.level > 0:
             return f"[等级{user.pay_grade.level}]"
     except (AttributeError, TypeError):
-        pass
-    return ''
-
-
-def safe_time(ts):
-    """安全地将 Unix 时间戳格式化为 'HH:MM:SS'。
-
-    Args:
-        ts: Unix 时间戳（秒）。
-
-    Returns:
-        'HH:MM:SS' 格式的时间字符串，时间戳无效时返回空字符串。
-    """
-    try:
-        if ts > 0:
-            return time.strftime('%H:%M:%S', time.localtime(ts))
-    except (OSError, ValueError):
         pass
     return ''
 

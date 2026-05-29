@@ -46,7 +46,7 @@ def parse_chat_msg(payload, enable_outputs=None):
     user = msg.user
     uid = get_user_id(user)
     common = {
-        'time': time.strftime('%H:%M:%S'),
+        'time': time.strftime('%Y-%m-%d %H:%M:%S'),
         'user_id': uid, 'user_name': user.nick_name,
         'grade': fmt_grade(user), 'fans_club': fmt_fans_club(user),
     }
@@ -104,7 +104,7 @@ def parse_gift_msg(payload, enable_outputs=None):
         'type': 'gift',
         'msg': f"[礼物] {user.nick_name}[{uid}] 礼物:{gift.name} x{cnt}{diamond_info}",
         'data': {
-            'time': time.strftime('%H:%M:%S'),
+            'time': time.strftime('%Y-%m-%d %H:%M:%S'),
             'user_id': uid, 'user_name': user.nick_name, 'gift_name': gift.name,
             'gift_count': cnt, 'diamond_total': diamond_total,
             'grade': fmt_grade(user), 'fans_club': fmt_fans_club(user),
@@ -131,7 +131,7 @@ def parse_like_msg(payload, enable_outputs=None):
         'type': 'like',
         'msg': f"[点赞] {user.nick_name}[{uid}] 点赞:{msg.count}个, 累计{msg.total}赞",
         'data': {
-            'time': time.strftime('%H:%M:%S'),
+            'time': time.strftime('%Y-%m-%d %H:%M:%S'),
             'user_id': uid, 'user_name': user.nick_name,
             'count': msg.count, 'total': msg.total,
             'grade': fmt_grade(user), 'fans_club': fmt_fans_club(user),
@@ -160,7 +160,7 @@ def parse_member_msg(payload, enable_outputs=None):
         'type': 'member',
         'msg': f"[进场] {user.nick_name}[{uid}][{gender}] 进入了直播间{extras}",
         'data': {
-            'time': time.strftime('%H:%M:%S'),
+            'time': time.strftime('%Y-%m-%d %H:%M:%S'),
             'user_id': uid, 'user_name': user.nick_name, 'gender': gender,
             'grade': fmt_grade(user), 'fans_club': fmt_fans_club(user),
             'member_count': msg.member_count,
@@ -181,7 +181,7 @@ def parse_social_msg(payload, enable_outputs=None):
     if not enable_outputs.get('social', True):
         return []
     msg = parse_proto(SocialMessage, payload)
-    if msg.action != 1:
+    if msg.action not in (1, 2):
         return []
     user = msg.user
     uid = get_user_id(user)
@@ -191,7 +191,7 @@ def parse_social_msg(payload, enable_outputs=None):
         'type': 'social',
         'msg': f"[关注/分享] {user.nick_name}[{uid}] {action} {follow}",
         'data': {
-            'time': time.strftime('%H:%M:%S'),
+            'time': time.strftime('%Y-%m-%d %H:%M:%S'),
             'user_id': uid, 'user_name': user.nick_name, 'action': action,
             'follow_count': msg.follow_count or '',
             'grade': fmt_grade(user), 'fans_club': fmt_fans_club(user),
@@ -223,7 +223,7 @@ def parse_room_user_seq_msg(payload, enable_outputs=None):
         'type': 'stats',
         'msg': f"[统计] {', '.join(parts)}",
         'data': {
-            'time': time.strftime('%H:%M:%S'),
+            'time': time.strftime('%Y-%m-%d %H:%M:%S'),
             'current': msg.total,
             'total_pv': msg.total_pv_for_anchor or '',
             'total_user': msg.total_user_str or '',
@@ -252,7 +252,7 @@ def parse_fansclub_msg(payload, enable_outputs=None):
         'type': 'fansclub',
         'msg': f"[粉丝团] {user.nick_name}[{uid}] {t}: {msg.content}",
         'data': {
-            'time': time.strftime('%H:%M:%S'),
+            'time': time.strftime('%Y-%m-%d %H:%M:%S'),
             'user_id': uid, 'user_name': user.nick_name,
             'type': t, 'content': msg.content,
             'grade': fmt_grade(user), 'fans_club': fmt_fans_club(user),
@@ -280,7 +280,7 @@ def parse_emoji_chat_msg(payload, enable_outputs=None):
         'type': 'emoji',
         'msg': f"[表情] {user.nick_name}[{uid}]: {content}",
         'data': {
-            'time': time.strftime('%H:%M:%S'),
+            'time': time.strftime('%Y-%m-%d %H:%M:%S'),
             'user_id': uid, 'user_name': user.nick_name,
             'emoji_id': msg.emoji_id, 'content': content,
             'grade': fmt_grade(user), 'fans_club': fmt_fans_club(user),
@@ -311,7 +311,7 @@ def parse_room_msg(payload, enable_outputs=None):
         'type': 'room',
         'msg': f"[直播间] {is_top}{detail}",
         'data': {
-            'time': time.strftime('%H:%M:%S'),
+            'time': time.strftime('%Y-%m-%d %H:%M:%S'),
             'is_top': '是' if msg.system_top_msg else '否',
             'room_id': msg.common.room_id if msg.common else '',
             'content': msg.content or '',
@@ -338,7 +338,7 @@ def parse_room_stats_msg(payload, enable_outputs=None):
         'type': 'roomstats',
         'msg': f"[直播统计] {detail} (数值:{msg.total})",
         'data': {
-            'time': time.strftime('%H:%M:%S'),
+            'time': time.strftime('%Y-%m-%d %H:%M:%S'),
             'detail': detail,
             'total': msg.total,
         },
@@ -367,7 +367,7 @@ def parse_rank_msg(payload, enable_outputs=None):
             'type': 'rank',
             'msg': f"[排行榜] {' | '.join(items)}",
             'data': {
-                'time': time.strftime('%H:%M:%S'),
+                'time': time.strftime('%Y-%m-%d %H:%M:%S'),
                 'ranks': ' | '.join(items),
             },
         }]
@@ -397,7 +397,7 @@ def parse_control_msg(payload, enable_outputs=None):
             'type': 'control',
             'msg': f"[直播状态] {status}",
             'data': {
-                'time': time.strftime('%H:%M:%S'),
+                'time': time.strftime('%Y-%m-%d %H:%M:%S'),
                 'status': status,
             },
         })
@@ -417,7 +417,7 @@ def parse_room_stream_adaptation_msg(payload, enable_outputs=None):
         enable_outputs: 未使用，保持签名一致。
 
     Returns:
-        类型为 '_log_only' 的结果列表，不会被写入 CSV/JSONL。
+        类型为 '_log_only' 的结果列表，不会被写入 CSV。
     """
     msg = parse_proto(RoomStreamAdaptationMessage, payload)
     return [{

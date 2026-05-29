@@ -4,16 +4,13 @@
 # # 开头表示不启用
 
 # ==================== 日志配置 ====================
-log_level: INFO                  # 日志级别: DEBUG / BARRAGE（终端输出弹幕） / INFO / WARNING / ERROR / NONE（NONE=关闭日志，数据文件照常写入）
-
-# ==================== Cookie 配置 ====================
-cookie_file: cookie.txt          # Cookie 文件路径（相对于脚本目录），不存在则以游客身份采集
+log_level: INFO                  # 日志级别: DEBUG / INFO / WARNING / ERROR / NONE（NONE=关闭日志，数据文件照常写入）
 
 # ==================== 等待开播配置 ====================
 live_stop: true                  # 直播结束后是否停止退出: true=结束退出 / false=等待重开播
 live_check_interval: 160         # 未开播时 HTTP 轮询间隔（秒）
 
-# ==================== 输出配置 ====================
+# ==================== 消息类型开关 ====================
 output:
   chat: true                     # 弹幕
   lucky_bag: true                # 福袋口令
@@ -28,23 +25,11 @@ output:
   room: false                    # 直播间公告
   roomstats: false               # 直播统计
   control: true                  # 直播状态
+
+# ==================== 输出格式配置 ====================
+format:
   gift_combo_final: true         # 礼物连击过滤: true=只记录连击最终值(x520) / false=记录每次递增(x1,x2,...,x520)
-  file_format: csv sqlite       # 输出格式，支持任意组合（空格分隔）: csv / json / sqlite / 留空不保存
+  csv: true                      # CSV 输出
+  sqlite: true                   # SQLite 输出
   file_dir: data                 # 数据输出目录
 
-# ==================== 网络配置 ====================
-network:
-  http_timeout: 15               # HTTP 超时（秒），超时后自动 ×1.5，封顶 60s，最多重试 3 次
-  ws_connect_timeout: 30         # WebSocket 底层 socket 超时（秒）
-  silence_timeout: 60            # 看门狗静默阈值（秒），超过则判定断连并重连
-  heartbeat_interval: 10         # 心跳间隔（秒）
-  rcvbuf_kb: 256                 # 接收缓冲区（KB），高流量直播间建议 512
-  proxy: null                    # 代理地址，如 {"http": "http://127.0.0.1:8080", "https": "socks5://127.0.0.1:1080"}
-
-# ==================== 重连配置 ====================
-max_reconnects: 3                # 最大重连次数（0 = 无限）
-reconnect_base_delay: 2          # 重连基础延迟（秒），指数退避：2s → 4s → 8s → ...
-reconnect_max_delay: 120         # 最大重连延迟（秒），退避封顶
-
-# ==================== 统计配置 ====================
-stats_interval: 60              # 吞吐统计打印间隔（秒）
