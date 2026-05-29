@@ -29,6 +29,8 @@ from base.output import RoomLogFilter
 room = None
 instances = []
 _shutting_down = False
+_active_rooms = {}  # {room_id: {'instance': DouyinBarrage, 'thread': Thread, 'config': dict}}
+_active_rooms_lock = threading.Lock()
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +157,8 @@ def run_room(room_cfg, log_level, live_stop):
 
     try:
         instance = DouyinBarrage(live_id, log_level=log_level, on_room_info=_make_on_room_info(room_cfg), multi_room=True)
-        instances.append(instance)
+        with _active_rooms_lock:
+            _active_rooms[live_id] = {'instance': instance, 'thread': threading.current_thread(), 'config': room_cfg}
 
         if live_stop is not None:
             instance.config['live_stop'] = live_stop
@@ -163,6 +166,95 @@ def run_room(room_cfg, log_level, live_stop):
         instance.start()
     except Exception as e:
         logger.error(f"[{live_id}] 采集异常: {e}")
+    finally:
+        with _active_rooms_lock:
+            _active_rooms.pop(live_id, None)
+
+
+
+def _start_room(room_cfg, log_level, live_stop):
+    """启动单个房间线程（热加载用）。"""
+    t = threading.Thread(
+        target=run_room,
+        args=(room_cfg, log_level, live_stop),
+        name=f"room-{room_cfg['id']}",
+        daemon=False,
+    )
+    t.start()
+    return t
+
+
+class RoomsWatcher:
+    """监控 rooms.txt 变化，自动增删房间（热加载）。"""
+
+    def __init__(self, rooms_file, log_level, live_stop, check_interval=10):
+        self._rooms_file = rooms_file
+        self._log_level = log_level
+        self._live_stop = live_stop
+        self._interval = check_interval
+        self._last_mtime = self._get_mtime()
+        self._stop_event = threading.Event()
+        self._thread = threading.Thread(target=self._watch_loop, name="rooms-watcher", daemon=True)
+
+    def _get_mtime(self):
+        try:
+            return os.path.getmtime(self._rooms_file)
+        except OSError:
+            return 0
+
+    def start(self):
+        self._thread.start()
+        logger.info(f"[热加载] 监控 {self._rooms_file} (间隔 {self._interval}s)")
+
+    def stop(self):
+        self._stop_event.set()
+
+    def _watch_loop(self):
+        while not self._stop_event.is_set():
+            self._stop_event.wait(self._interval)
+            if self._stop_event.is_set():
+                break
+            current_mtime = self._get_mtime()
+            if current_mtime == self._last_mtime:
+                continue
+            self._last_mtime = current_mtime
+            self._reload_rooms()
+
+    def _reload_rooms(self):
+        new_rooms = load_rooms_from_config(self._rooms_file)
+        new_ids = {r['id'] for r in new_rooms}
+
+        with _active_rooms_lock:
+            current_ids = set(_active_rooms.keys())
+
+        to_remove = current_ids - new_ids
+        to_add = new_ids - current_ids
+
+        if not to_remove and not to_add:
+            logger.info("[热加载] rooms.txt 变化但房间列表无变化")
+            return
+
+        if to_remove:
+            logger.info(f"[热加载] 移除房间: {to_remove}")
+            with _active_rooms_lock:
+                for rid in to_remove:
+                    entry = _active_rooms.get(rid)
+                    if entry:
+                        try:
+                            entry['instance'].stop()
+                        except Exception as e:
+                            logger.error(f"[热加载] 停止 {rid} 异常: {e}")
+
+        if to_add:
+            new_room_list = [r for r in new_rooms if r['id'] in to_add]
+            logger.info(f"[热加载] 新增房间: {[r['id'] for r in new_room_list]}")
+            for r in new_room_list:
+                if r.get('name'):
+                    RoomLogFilter.update_anchor(r['id'], r['name'])
+                _start_room(r, self._log_level, self._live_stop)
+                time.sleep(3.5)  # 错开启动
+
+        logger.info(f"[热加载] 完成，当前 {len(new_ids)} 个房间")
 
 
 def _parse_range(part, rooms_count):
@@ -295,20 +387,21 @@ def parse_user_input(user_input, rooms):
 
 
 def main_multi(room_list, log_level, live_stop):
-    """多房间模式入口。
+    """多房间模式入口（支持热加载 rooms.txt）。
 
     Args:
         room_list: 房间配置列表 [{'id': str, 'name': str}, ...]
         log_level: 日志级别
         live_stop: 直播结束后是否停止退出 (bool)。
     """
+    global _shutting_down
     if not room_list:
         print("错误：未选择任何房间")
         sys.exit(1)
 
     print("")
     print("=" * 45)
-    print(f"开始多房间采集")
+    print("开始多房间采集（热加载模式）")
     print("=" * 45)
     print("")
     print(f"房间数量: {len(room_list)}")
@@ -323,39 +416,44 @@ def main_multi(room_list, log_level, live_stop):
         print(f"日志级别: {log_level}")
     if live_stop is not None:
         print(f"直播结束行为: {'结束退出' if live_stop else '等待重开播'}")
-    print("按 Ctrl+C 停止所有采集\n")
+    print("按 Ctrl+C 停止所有采集")
+    print("热加载: 修改 rooms.txt 自动增删房间\n")
 
-    # 逐个启动，错开签名调用（subprocess fork 压力）
-    threads = []
+    # 逐个启动，错开签名调用
     for i, room_cfg in enumerate(room_list):
-        t = threading.Thread(
-            target=run_room,
-            args=(room_cfg, log_level, live_stop),
-            name=f"room-{room_cfg['id']}",
-            daemon=False,
-        )
-        threads.append(t)
-        t.start()
-        # 错开 3.5s，避免 N 个房间同时 fork Node.js
+        if room_cfg.get('name'):
+            RoomLogFilter.update_anchor(room_cfg['id'], room_cfg['name'])
+        _start_room(room_cfg, log_level, live_stop)
         if i < len(room_list) - 1:
             time.sleep(3.5)
 
-    print(f"\n[主控] {len(threads)} 个采集线程已启动\n")
+    # 启动文件监控
+    rooms_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rooms.txt')
+    watcher = RoomsWatcher(rooms_file, log_level, live_stop)
+    watcher.start()
 
-    # 等待所有线程（使用短超时循环，快速响应 Ctrl+C）
+    print(f"\n[主控] {len(room_list)} 个采集线程已启动\n")
+
+    # 等待：直到所有房间线程退出或用户中断
     try:
-        while threads:
-            for t in threads[:]:
-                t.join(timeout=0.5)  # 短超时，快速响应信号
-                if not t.is_alive():
-                    threads.remove(t)
+        while not _shutting_down:
+            time.sleep(1)
+            with _active_rooms_lock:
+                if not _active_rooms:
+                    break
     except KeyboardInterrupt:
         print("\n【用户中断，停止所有采集】")
-        signal_handler(signal.SIGINT, None)
-        # 等待线程退出（给予充足时间）
-        for t in threads:
-            t.join(timeout=3)
+        _shutting_down = True
+        watcher.stop()
+        with _active_rooms_lock:
+            for entry in list(_active_rooms.values()):
+                try:
+                    entry['instance'].stop()
+                except Exception:
+                    pass
+        time.sleep(2)
 
+    watcher.stop()
     print("[主控] 所有采集已停止")
 
 
