@@ -32,3 +32,4 @@ cookie.txt
 # 弹幕数据（本地存储）
 docs/data/
 logs/
+*.db
