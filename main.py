@@ -325,8 +325,16 @@ def parse_user_input(user_input, rooms):
             return ('multi', rooms[:], [])
         return None, None, warnings
 
-    # 纯直播间ID
+    # 纯数字输入：0=全部房间，1~N=编号，超出范围=直播间ID
     if user_input.isdigit():
+        num = int(user_input)
+        if num == 0:
+            if rooms:
+                return ('multi', rooms[:], [])
+            return None, None, warnings
+        idx = num - 1
+        if 0 <= idx < len(rooms):
+            return ('multi', [rooms[idx]], [])
         return ('single', user_input, [])
 
     # 统一分隔符：逗号和空格都作为分隔符
@@ -532,8 +540,9 @@ def main():
 
         def show_input_help():
             print("""
-  编号        1 或 1 2 3 或 1,2,3 或 1-3
+  编号        1 或 1 2 3
   直播间ID    536863152858
+  输入 0 采集全部房间
   输入 q 退出程序
 """)
 
