@@ -95,15 +95,23 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
 
-        # 切换到 barrage-data 分支（data/ 已在工作区，无需额外 checkout）
         git fetch origin barrage-data || true
+
+        # 用 worktree 在单独目录操作 barrage-data 分支，避免覆盖工作区的 data/
+        DATA_WT=/tmp/barrage-data-wt
+        rm -rf "$DATA_WT"
         if git rev-parse --verify origin/barrage-data >/dev/null 2>&1; then
-          git checkout barrage-data
+          git worktree add "$DATA_WT" barrage-data
         else
-          git checkout --orphan barrage-data
-          git rm -rf . --quiet 2>/dev/null || true
+          git worktree add --orphan "$DATA_WT" barrage-data
+          rm -rf "$DATA_WT"/* "$DATA_WT"/.* 2>/dev/null || true
         fi
 
+        # 同步采集数据到 worktree
+        cp -r data/ "$DATA_WT/data/" 2>/dev/null || mkdir -p "$DATA_WT/data/"
+        cp -r logs/ "$DATA_WT/logs/" 2>/dev/null || true
+
+        cd "$DATA_WT"
         git add -f data/ logs/ 2>/dev/null || true
         if git diff --staged --quiet; then
           echo "无数据变化，跳过提交"
@@ -111,3 +119,7 @@ jobs:
           git commit -m "Update barrage data: $(date '+%Y-%m-%d %H:%M') [skip ci]"
           git push origin barrage-data
         fi
+
+        # 清理 worktree
+        cd "$GITHUB_WORKSPACE"
+        git worktree remove "$DATA_WT" --force 2>/dev/null || true
