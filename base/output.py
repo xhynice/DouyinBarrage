@@ -92,10 +92,10 @@ class QueueHandler(logging.Handler):
             self._dropped += 1
 
     def _drain_loop(self):
-        """后台刷新循环，每 2s 将缓冲区日志批量写出。"""
+        """后台刷新循环，每 10s 将缓冲区日志批量写出。"""
         while not self._stop.is_set():
             self._drain()
-            time.sleep(2)
+            time.sleep(10)
         self._drain()
 
     def _drain(self):
@@ -571,9 +571,9 @@ class DataRecorder:
                 buf.append(sqlite_data)
 
     def _bg_flush_loop(self):
-        """后台刷新循环，每 2s 将缓冲区数据写入磁盘。"""
+        """后台刷新循环，每 10s 将缓冲区数据写入磁盘。"""
         try:
-            while not self._stop.wait(timeout=2.0):
+            while not self._stop.wait(timeout=10.0):
                 self._do_flush()
                 if self._dropped > 0:
                     logger.warning(f"[数据] ⚠️ 缓冲区溢出，已丢弃 {self._dropped} 条")
