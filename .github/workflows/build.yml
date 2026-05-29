@@ -95,9 +95,7 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
 
-        MAIN_SHA=$(git rev-parse HEAD)
-
-        # 切换到 barrage-data 分支
+        # 切换到 barrage-data 分支（data/ 已在工作区，无需额外 checkout）
         git fetch origin barrage-data || true
         if git rev-parse --verify origin/barrage-data >/dev/null 2>&1; then
           git checkout barrage-data
@@ -105,9 +103,6 @@ jobs:
           git checkout --orphan barrage-data
           git rm -rf . --quiet 2>/dev/null || true
         fi
-
-        # 从 main 拉取最新的 data/ 和 logs/
-        git checkout $MAIN_SHA -- data/ logs/ 2>/dev/null || true
 
         git add -f data/ logs/ 2>/dev/null || true
         if git diff --staged --quiet; then
