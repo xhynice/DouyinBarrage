@@ -291,10 +291,10 @@ class DouyinBarrage:
 
     def start(self):
         """启动采集，进入 WebSocket 连接主循环。"""
-        logger.info(f"[启动] live_id: {self.live_id}")
-        logger.info(f"[启动] UA: {self._ua}")
-        logger.info(f"[启动] user_unique_id: {self._user_unique_id}")
-        logger.info(f"[启动] 网络配置: http_timeout={self.HTTP_TIMEOUT}s, "
+        logger.debug(f"[启动] live_id: {self.live_id}")
+        logger.debug(f"[启动] UA: {self._ua}")
+        logger.debug(f"[启动] user_unique_id: {self._user_unique_id}")
+        logger.debug(f"[启动] 网络配置: http_timeout={self.HTTP_TIMEOUT}s, "
                      f"ws_connect_timeout={self.WS_CONNECT_TIMEOUT}s, "
                      f"silence_timeout={self.SILENCE_TIMEOUT}s, "
                      f"heartbeat_interval={self.HEARTBEAT_INTERVAL}s, "
