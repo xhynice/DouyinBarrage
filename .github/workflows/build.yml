@@ -89,16 +89,30 @@ jobs:
           logs/
         retention-days: 3
 
-    - name: Commit data to repo
+    - name: Commit data to data branch
       continue-on-error: true
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
+
+        MAIN_SHA=$(git rev-parse HEAD)
+
+        # 切换到 barrage-data 分支
+        git fetch origin barrage-data || true
+        if git rev-parse --verify origin/barrage-data >/dev/null 2>&1; then
+          git checkout barrage-data
+        else
+          git checkout --orphan barrage-data
+          git rm -rf . --quiet 2>/dev/null || true
+        fi
+
+        # 从 main 拉取最新的 data/ 和 logs/
+        git checkout $MAIN_SHA -- data/ logs/ 2>/dev/null || true
+
         git add -f data/ logs/ 2>/dev/null || true
         if git diff --staged --quiet; then
           echo "无数据变化，跳过提交"
         else
           git commit -m "Update barrage data: $(date '+%Y-%m-%d %H:%M') [skip ci]"
-          git pull --rebase origin main
-          git push
+          git push origin barrage-data
         fi
