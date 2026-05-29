@@ -30,6 +30,6 @@ output:
 format:
   gift_combo_final: true         # 礼物连击过滤: true=只记录连击最终值(x520) / false=记录每次递增(x1,x2,...,x520)
   csv: true                      # CSV 输出
-  sqlite: true                   # SQLite 输出
+  sqlite: false                   # SQLite 输出
   file_dir: data                 # 数据输出目录
 
