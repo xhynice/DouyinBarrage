@@ -108,8 +108,10 @@ jobs:
         fi
 
         # 同步采集数据到 worktree
-        cp -r data/ "$DATA_WT/data/" 2>/dev/null || mkdir -p "$DATA_WT/data/"
-        cp -r logs/ "$DATA_WT/logs/" 2>/dev/null || true
+        mkdir -p "$DATA_WT/data/"
+        rsync -a data/ "$DATA_WT/data/"
+        mkdir -p "$DATA_WT/logs/"
+        rsync -a logs/ "$DATA_WT/logs/"
 
         cd "$DATA_WT"
         git add -f data/ logs/ 2>/dev/null || true
