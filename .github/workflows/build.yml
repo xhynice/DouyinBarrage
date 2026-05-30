@@ -57,6 +57,24 @@ jobs:
           echo "未配置 COOKIE_TXT secret，将以游客身份采集"
         fi
 
+    - name: Load historical data
+      run: |
+        git fetch origin barrage-data || true
+        if git rev-parse --verify origin/barrage-data >/dev/null 2>&1; then
+          DATA_WT=/tmp/barrage-data-dedup
+          rm -rf "$DATA_WT"
+          git worktree add "$DATA_WT" barrage-data 2>/dev/null || true
+          if [ -d "$DATA_WT/data" ]; then
+            echo "加载历史数据..."
+            rsync -a "$DATA_WT/data/" data/
+            echo "历史数据加载完成，共 $(find data/ -name '*.db' | wc -l) 个 db 文件"
+          fi
+          cd "$GITHUB_WORKSPACE"
+          git worktree remove "$DATA_WT" --force 2>/dev/null || true
+        else
+          echo "barrage-data 分支不存在，跳过历史数据加载"
+        fi
+
     - name: Run barrage collector
       run: |
         LIVE_ID="${{ github.event.inputs.live_id }}"
