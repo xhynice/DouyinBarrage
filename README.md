@@ -1,78 +1,50 @@
 # DouyinBarrage
 
-> 抖音直播间弹幕数据实时采集器 — WebSocket 长连接，13 种消息类型，CSV / SQLite 双格式输出。
+> 抖音直播间弹幕数据实时采集器 — WebSocket 长连接，13 种消息类型，CSV / SQLite 双格式输出，集成直播录制。
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)
 
-## 功能特性
+## 运行方法
 
-- **实时采集** — 基于 WebSocket 长连接，毫秒级获取直播间弹幕数据
-- **13 种消息** — 弹幕、礼物、点赞、关注、进场、粉丝团、福袋、表情、统计等
-- **双格式输出** — CSV（UTF-8 BOM，Excel 直接打开）、SQLite（跨会话追加，WAL 模式）
-- **登录态支持** — 支持 Cookie 登录，获取完整礼物等数据
-- **多房间并发** — 同时采集多个直播间，状态面板轮显
-- **等待开播** — 下播后自动监控，开播立即重新采集
-- **弱网容错** — 自动重连、看门狗检测静默断连、gzip 损坏包跳过
-- **假死检测** — 业务消息看门狗，检测"有数据但无弹幕"的假活状态
-- **灵活配置** — 每种消息类型独立开关，输出格式可选
-
-## 安装
-
-### 环境要求
-
-- Python 3.11+
-- Node.js v20+（执行签名脚本）
-
-### 安装步骤
+### 1. 安装依赖
 
 ```bash
-git clone https://github.com/xhynice/DouyinBarrage
-cd DouyinBarrage
+# Python 依赖
 pip install -r requirements.txt
+
+# Node.js 依赖（签名脚本）
+npm install crypto-js
+
+# 系统依赖
+# FFmpeg（直播录制需要，不录制可跳过）
+# Ubuntu/Debian: sudo apt install ffmpeg
+# macOS: brew install ffmpeg
 ```
 
-### 运行
+### 2. 配置 Cookie（可选）
+
+未登录时部分消息（如礼物详情）可能受限。提供登录 Cookie 可获取完整数据。
 
 ```bash
-# 交互式选择房间（从 config.yaml 读取）
-python main.py
-
-# 直接指定直播间 ID
-python main.py 536863152858
-
-# 调试模式
-python main.py 536863152858 --log-level DEBUG
-
-# 直播结束后退出
-python main.py 536863152858 --live-stop
-
-# 直播结束后等待重开播
-python main.py 536863152858 --live-wait
-
-# 停止采集
-Ctrl+C
+# 复制样本文件
+cp cookie.example.txt cookie.txt
 ```
 
-### 命令行参数
+**获取 Cookie：**
 
-| 参数 | 说明 |
-|------|------|
-| `live_id` | 直播间 ID（可选，不提供则交互式输入） |
-| `--log-level` | 覆盖日志级别：`DEBUG` / `INFO` / `WARNING` / `ERROR` / `NONE` |
-| `--live-stop` | 直播结束后停止退出（默认跟随配置文件） |
-| `--live-wait` | 直播结束后等待重开播（默认跟随配置文件） |
+1. 浏览器登录 [抖音](https://www.douyin.com)
+2. 按 `F12` 打开开发者工具 → Application → Cookies → `douyin.com`
+3. 全选复制所有 Cookie，粘贴到 `cookie.txt`
 
-## 配置说明
+> **不配置 Cookie 的影响：** 游客模式下可正常采集弹幕、点赞、进场等基础消息，但礼物详情、用户等级等信息可能不完整。
 
-### 房间配置
+### 3. 配置房间
 
-房间列表通过 `rooms.txt` 文件管理，每行一个房间。
+编辑 `rooms.txt`，每行一个房间：
 
-#### 文件格式
-
-```
+```csv
 126833924894,张君雅
 235371120297,才圆圆
 #662819707065,不启用的房间
@@ -83,360 +55,99 @@ Ctrl+C
 - 空行自动跳过
 - 主播名可选，首次连接时自动获取并更新
 
-### Cookie 配置
+### 4. 运行
 
-未登录时部分消息（如礼物详情）可能受限。提供登录 Cookie 可获取完整数据。
+```bash
+# 交互式选择房间
+python main.py
 
-#### 快速配置
+# 直接指定直播间 ID
+python main.py 536863152858
 
-1. 复制样本文件：
-   ```bash
-   cp cookie.example.txt cookie.txt
-   ```
+# 启用录制
+python main.py 536863152858 --record
 
-2. 浏览器登录 [抖音](https://www.douyin.com)
-
-3. 按 `F12` 打开开发者工具 → Application → Cookies → `douyin.com`
-
-4. 全选复制所有 Cookie，粘贴到 `cookie.txt`
-
-#### 支持格式
-
-**格式一** — 浏览器导出（推荐）：
-
-```
-name1=value1; name2=value2; name3=value3
+# 采集全部房间
+python main.py --all
 ```
 
-**格式二** — 每行一个：
+## 命令行参数
 
-```
-name1=value1
-name2=value2
-```
-
-**格式三** — Netscape cookie jar：
-
-```
-.douyin.com	TRUE	/	FALSE	0	sessionid	abc123
-```
-
-#### 关键字段
-
-| 字段 | 说明 |
+| 参数 | 说明 |
 |------|------|
-| `sessionid` | 会话标识，必需 |
-| `ttwid` | 设备标识，自动获取 |
-| `s_v_web_id` | 验证 ID |
+| `live_id` | 直播间 ID（不提供则交互式选择） |
+| `--log-level {DEBUG,INFO,WARNING,ERROR,NONE}` | 覆盖日志级别 |
+| `--live-stop` | 直播结束后停止退出（默认跟随配置文件） |
+| `--live-wait` | 直播结束后等待重开播（默认跟随配置文件） |
+| `--record` | 启用直播流录制（覆盖配置文件中的 `record.enabled`） |
+| `--all` | 采集 `rooms.txt` 中全部未注释的房间（跳过交互选择） |
 
-> ⚠️ Cookie 包含敏感信息，`cookie.txt` 已加入 `.gitignore`，请勿提交到版本控制。
+**示例：**
 
-### 配置文件
+```bash
+# 调试模式
+python main.py 536863152858 --log-level DEBUG
+
+# 录制 + 直播结束退出
+python main.py 536863152858 --record --live-stop
+
+# 全部房间 + 录制
+python main.py --all --record
+```
+
+## 配置文件
 
 编辑 `config.yaml`：
 
 ```yaml
-log_level: INFO              # 日志级别: DEBUG / INFO / WARNING / ERROR / NONE
+# ==================== 输出配置 ====================
+output_dir: data                 # 统一输出目录（弹幕数据 + 录制视频 + 元数据）
 
-live_stop: false             # 直播结束后是否停止退出: true=结束退出, false=等待重开播
-live_check_interval: 160     # 未开播 HTTP 轮询间隔（秒）
+# ==================== 等待开播配置 ====================
+live_stop: true                  # 直播结束后是否停止退出: true=结束退出 / false=等待重开播
+live_check_interval: 160         # 未开播 HTTP 轮询间隔（秒）
 
 # ==================== 消息类型开关 ====================
 output:
-  chat: true                 # 弹幕
-  gift: true                 # 礼物
-  like: true                 # 点赞
-  member: false              # 进场
-  social: true               # 关注/分享
-  stats: true                # 统计
-  lucky_bag: true            # 福袋口令
-  rank: false                # 排行榜
-  fansclub: false            # 粉丝团
-  emoji: false               # 表情
-  room: false                # 直播间公告
-  roomstats: false           # 直播统计
-  control: true              # 直播状态
+  chat: true                     # 弹幕
+  lucky_bag: true                # 福袋口令
+  gift: true                     # 礼物
+  like: true                     # 点赞
+  member: false                  # 进场
+  social: true                   # 关注/分享
+  rank: false                    # 排行榜
+  stats: true                    # 统计
+  fansclub: false                # 粉丝团
+  emoji: false                   # 表情
+  room: false                    # 直播间公告
+  roomstats: false               # 直播统计
+  control: true                  # 直播状态
 
-# ==================== 输出格式配置 ====================
-format:
-  gift_combo_final: false    # 礼物连击过滤: true=只记录最终值(x520) / false=记录每次递增
-  csv: true                  # CSV 输出
-  sqlite: true               # SQLite 输出
-  file_dir: data             # 输出目录
+# ==================== 弹幕配置 ====================
+barrage:
+  gift_combo_final: true         # 礼物连击过滤: true=只记录连击最终值(x520) / false=记录每次递增
+  csv: true                      # CSV 输出
+  sqlite: false                  # SQLite 输出
+
+# ==================== 录制配置 ====================
+record:
+  enabled: false                 # 是否同时录制直播流
+  format: ts                     # 封装格式: ts / flv / mp4
+  quality: 原画                  # 画质: 原画/超清/高清/标清/省流
+  segment_time: 0                # 分段时长（秒），0=不分段，建议 3600（1小时）
+  segment_size: 0                # 分段文件大小（MB），0=不限制，建议 2048（2GB）
+  auto_convert: true             # 录制结束后自动 ts→mp4 转码（需 ffmpeg）
+
+# ==================== API 配置 ====================
+api:
+  enabled: false                 # 是否启用 HTTP API 服务
+  host: 0.0.0.0                  # 监听地址
+  port: 8088                     # 监听端口
 ```
-
-### 日志级别
-
-| 级别 | 说明 |
-|------|------|
-| `DEBUG` | 调试信息，包含弹幕消息和所有详细日志 |
-| `INFO` | 常规信息，输出运行状态和关键事件 |
-| `WARNING` | 警告信息，仅输出警告和错误 |
-| `ERROR` | 错误信息，仅输出错误 |
-| `NONE` | 关闭日志，数据文件照常写入 |
-
-### 输出格式
-
-通过 `output` 下的 `csv` 和 `sqlite` 两个独立开关控制，可同时启用，都关闭则仅输出到日志。
-
-| 配置键 | 说明 |
-|--------|------|
-| `csv` | 按消息类型分 CSV 文件（UTF-8 BOM，Excel 直接打开） |
-| `sqlite` | SQLite 数据库（`data.db`），跨会话追加，WAL 模式，INTEGER 类型字段 |
-
-SQLite 特性：
-- 数据库位于主播目录 `data/{主播名}/data.db`，跨多次采集追加
-- `time` 字段存储 Unix 秒级时间戳（INTEGER），跨午夜无歧义，视频+弹幕同步只需简单减法
-- 数值字段（如 `gift_count`、`diamond_total`）自动存为 INTEGER 类型
-- 查询时可用 `datetime(time, 'unixepoch', 'localtime')` 转为可读时间
-
-### 消息类型
-
-| 类型 | 说明 | 日志标识 | 配置键 |
-|------|------|----------|--------|
-| 聊天 | 用户文字弹幕 | `[聊天]` | `chat` |
-| 福袋口令 | 福袋活动口令 | `[福袋口令]` | `lucky_bag` |
-| 进场 | 用户进入直播间 | `[进场]` | `member` |
-| 点赞 | 用户双击点赞 | `[点赞]` | `like` |
-| 关注 | 用户关注主播 | `[关注/分享]` | `social` |
-| 礼物 | 用户赠送礼物（含抖币计算） | `[礼物]` | `gift` |
-| 粉丝团 | 加入/升级粉丝团 | `[粉丝团]` | `fansclub` |
-| 表情 | 用户发送表情包 | `[表情]` | `emoji` |
-| 统计 | 实时在线人数 | `[统计]` | `stats` |
-| 直播统计 | 累计观看等 | `[直播统计]` | `roomstats` |
-| 直播间 | 置顶公告等 | `[直播间]` | `room` |
-| 排行榜 | 积分排行榜 | `[排行榜]` | `rank` |
-| 直播状态 | 开始/暂停/结束 | `[直播状态]` | `control` |
-
-## 机制说明
-
-### 运行机制
-
-```
-1. 加载 Cookie    → 从 cookie.txt 加载登录态，否则游客模式
-2. 获取 ttwid     → HTTP 请求 live.douyin.com 获取（懒加载，首次访问触发）
-3. 获取 roomId    → 调用 enter_room_api 解析直播间信息
-4. 生成签名       → 13 参数拼接 → MD5 → Node.js 执行 sign.js → X-Bogus
-5. WebSocket 连接 → 携带登录 Cookie + 签名建立长连接
-6. 消息处理       → PushFrame → gzip 解压 → Response → 按类型分发
-7. 数据输出       → 异步日志 + CSV/SQLite 批量写入（2s 刷新）
-```
-
-### 线程模型
-
-```
-主线程 (_connectWebSocket)
-│   WebSocket 连接循环（含重连逻辑）
-│   run_forever() 阻塞在此
-│
-├── heartbeat (daemon)    每 10s 发送心跳包
-├── watchdog  (daemon)    每 10s 检查：
-│   ├── 连接建立超时（60s 未建立连接）
-│   ├── 数据静默超时（60s 无任何数据）
-│   └── 业务消息超时（60s 有数据但无业务消息）
-├── stats     (daemon)    每 300s 打印吞吐统计
-└── monitor   (daemon)    等待开播模式下的 HTTP 轮询
-```
-
-### 三层看门狗检测
-
-| 层级 | 检测目标 | 超时阈值 | 触发动作 |
-|------|---------|---------|---------|
-| 连接建立 | `run_forever()` 卡在 TCP 连接阶段 | `silence_timeout` | 强制关闭 socket |
-| 数据静默 | 完全无数据（TCP 静默断开） | `silence_timeout` | 强制关闭 socket + ws |
-| 业务消息 | 有数据但无交互类消息（假活） | `silence_timeout` | 强制关闭 socket + ws |
-
-> **业务消息看门狗只认交互类消息**（chat/gift/like/member/social/fansclub/emoji），
-> `RoomRankMessage`、`RoomStatsMessage` 等系统级消息不重置计时器。
-
-### 等待开播
-
-程序默认行为：启动时若直播间未开播，自动等待；采集过程中下播，自动等待重开播。
-
-```
-默认 (live_stop: false):  未开播 → 等待 → 开播 → 采集 → 下播 → 等待 → 重开播 → 循环
-停止 (live_stop: true):   开播 → 采集 → 下播 → 退出
-```
-
-检测机制采用双层方案：
-- **主检测** — WebSocket 交互消息（毫秒级，零额外请求）
-- **兜底** — HTTP 轮询 `live_check_interval` 秒间隔
-
-### 多房间模式
-
-在 `rooms.txt` 中配置多个房间：
-
-```
-126833924894,张君雅
-371992233267,Polaris熠熠
-```
-
-- 每个房间独立线程，独立 WebSocket 连接
-- 控制台状态面板（`[采集 3 房] 张君雅 1234条(5.2m/s) | ...`）
-- 日志自动添加 `[主播名]` 前缀，区分来源
-- 各房间数据独立写入 `data/{主播名}/` 目录
-
-## 数据输出
-
-### 目录结构
-
-```
-data/{主播名}/
-├── data.db                     # SQLite 数据库（跨会话追加，需启用 sqlite 格式）
-├── meta.json                   # 主播信息
-├── avatar.jpg                  # 主播头像
-├── cover.jpg                   # 直播间封面
-├── 20260529_2030/              # 会话目录（每次开播新建）
-│   ├── chat.csv
-│   ├── gift.csv
-│   ├── like.csv
-│   ├── social.csv
-│   ├── stats.csv
-│   ├── control.csv
-│   └── ...
-└── ...
-```
-
-- 房间目录命名：主播名
-- 会话目录命名：`YYYYMMDD_HHMM`（如 `20260529_2030`）
-- SQLite 数据库位于主播目录下（`data.db`），跨多次采集追加
-- 延迟创建：无数据不产生空文件
-- CSV UTF-8 BOM 编码，Excel 直接打开
-
-### CSV / SQLite 字段
-
-CSV 与 SQLite 共用相同字段定义。SQLite 中 `time` 字段存为 Unix 秒级时间戳（INTEGER），数值字段（如 `gift_count`）也存为 INTEGER 类型。
-
-| 类型 | 字段 |
-|------|------|
-| chat / lucky_bag | time, user_id, user_name, content, grade, fans_club |
-| gift | time, user_id, user_name, gift_name, gift_count, diamond_total, grade, fans_club |
-| like | time, user_id, user_name, count, total, grade, fans_club |
-| member | time, user_id, user_name, gender, grade, fans_club, member_count |
-| social | time, user_id, user_name, action, follow_count, grade, fans_club |
-| stats | time, current, total_pv, total_user, online_anchor |
-| control | time, status |
-
-### CSV 示例
-
-```csv
-time,user_id,user_name,content,grade,fans_club
-2026-05-29 08:36:55,97992671880,幸运星陈,让我看看哪个美女好看？,[等级6],[粉丝团 Lv1]
-```
-
-## 弹幕查看器
-
-采集数据可通过内置前端页面可视化查看。
-
-### 构建数据
-
-```bash
-python docs/build_barrage.py
-```
-
-将 CSV 会话数据转换为前端可用的 JSON 格式，输出到 `docs/data/barrage/`。
-
-### 启动查看
-
-```bash
-cd docs && python -m http.server 8080
-```
-
-浏览器打开 `http://localhost:8080` 即可查看。
-
-### 功能
-
-- 多直播间切换
-- 级联会话选择（年月 → 会话列表）
-- 内容搜索、@用户搜索
-- 消息类型筛选（弹幕/礼物/点赞等）
-- 排行榜统计（发言数、礼物抖币、点赞数等）
-- 礼物抖币自动计算（识别连送去重）
-
-详见 [docs/build_barrage.md](docs/build_barrage.md)
-
-## 项目结构
-
-```
-├── main.py             启动入口（参数解析、交互选择、多房间管理）
-├── config.yaml         运行配置
-├── sign.js             签名脚本（Node.js）
-├── cookie.txt          登录 Cookie（需自行创建）
-├── cookie.example.txt  Cookie 样本文件
-├── rooms.txt           房间列表
-├── requirements.txt    Python 依赖
-├── base/               基础层
-│   ├── messages.py     Protobuf 消息定义（PushFrame / Response / 13 种业务消息）
-│   ├── parser.py       消息解析与分发表（HANDLERS 字典）
-│   ├── output.py       异步日志 + 数据记录器 + 吞吐统计
-│   └── utils.py        配置加载、Cookie 解析、常量、工具函数
-├── service/            服务层
-│   ├── fetcher.py      采集器主类（连接管理、消息分发、心跳、看门狗）
-│   ├── network.py      HTTP 请求 + WebSocket URL 构建 + 房间 API
-│   └── signer.py       X-Bogus 签名生成（subprocess 调用 Node.js）
-└── docs/               弹幕查看器
-    ├── index.html      前端页面
-    ├── barrage.js      前端逻辑
-    ├── barrage.css     样式
-    ├── build_barrage.py 数据构建脚本（CSV → JSON）
-    └── data/barrage/   构建产物（JSON + JSONL）
-```
-
-## 常见问题
-
-### 程序假死（有连接但无弹幕）
-
-**现象**：日志显示 `[数据] 就绪` 后无弹幕，看门狗静默时间不断重置，只有低价值消息。
-
-**原因**：WebSocket 连接建立后，服务端未下发业务消息（仅系统通知）。
-
-**解决**：业务消息看门狗会自动检测并重连。
-
-### 程序假死（完全无数据）
-
-**现象**：日志显示 `[数据] 就绪` 后完全无任何输出，看门狗也不打印。
-
-**原因**：TCP 静默断开，`run_forever()` 阻塞在 `recv()`。
-
-**解决**：`ping_timeout=10` + 看门狗强制关闭 socket。
-
-### DEVICE_BLOCKED
-
-WebSocket 握手返回 `DEVICE_BLOCKED` 通常是 **X-Bogus 签名问题**，而非 IP 或 Cookie 问题。
-
-1. 用 `--log-level DEBUG` 检查签名输出是否正常
-2. 确认 Node.js 版本 ≥ 16
-3. 检查 `sign.js` 的 polyfill 兼容性
-
-### Cookie 过期
-
-Cookie 过期不影响基本弹幕采集。登录态仅影响礼物详情等少数字段，过期后重新从浏览器导出即可。
-
-### 签名脚本失效
-
-`sign.js` 来自 [DouYin_Spider](https://github.com/cv-cat/DouYin_Spider)，可能随抖音版本更新失效，需更新脚本。
-
-### 首次连接无弹幕，重启后正常
-
-**现象**：程序首次连接后只有低价值消息，重启后立即有弹幕。
-
-**原因**：服务端对新 WebSocket 连接的消息订阅存在延迟或异常。
-
-**解决**：业务消息看门狗 60 秒后自动重连，无需手动重启。
 
 ## 更新记录
 
 详见 [CHANGELOG.md](CHANGELOG.md)
-
-## 依赖
-
-| 包名 | 用途 |
-|------|------|
-| `requests` | HTTP 请求 |
-| `websocket-client` | WebSocket 连接 |
-| `proto-plus` | Protobuf 序列化/反序列化 |
-| `protobuf` | Protobuf 运行时 |
-| `pyyaml` | YAML 配置解析 |
 
 ## 免责声明
 
@@ -446,3 +157,4 @@ Cookie 过期不影响基本弹幕采集。登录态仅影响礼物详情等少�
 
 - [DouYin_Spider](https://github.com/cv-cat/DouYin_Spider) — 签名脚本参考
 - [DouyinLiveWebFetcher](https://github.com/saermart/DouyinLiveWebFetcher) — 弹幕爬取参考
+- [DouyinLiveRecorder](https://github.com/ihmily/DouyinLiveRecorder) — 录制架构与多 API 降级参考

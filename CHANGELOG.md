@@ -1,53 +1,56 @@
 # 更新记录
 
-## 2026-05-29
+## 2026-06-03
 
-### ⚠️ 历史数据
+### 新增
 
-**如果你在 2026-05-29 采集过数据，请对历史数据命名和路径以及CSV文件time字段进行手动修复。**
-
-### 前端（弹幕查看器）
-
-- 会话目录格式统一为 `YYYYMMDD_HHMM`（如 `20260529_1148`）
-- 级联下拉选择：年月 → 会话列表，支持滚动
-- 月份筛选仅加载目标月份数据，不加载全部会话
-- 切换会话/主播时自动重置所有筛选状态
-- `build_barrage.py` 改为仅使用 CSV 构建
+- 直播流录制（`DouyinRecorder`），FFmpeg 子进程，支持 ts/flv/mp4 + 分段 + 自动转码
+- 画质选择（原画/超清/高清/标清/省流），支持自动降级和连通性检测
+- `--record` / `--all` 命令行参数
+- WebSocket 预请求：连接前获取服务端 `cursor`，提高连接稳定性
+- 多 API 降级：主 API 失败后自动降级到 HTML 页面解析
+- 下播二次确认：流中断后等待 `recheck_delay` 秒再确认，避免误判
+- HTTP API 服务（`service/api.py`）：`/api/status`、`/api/rooms`、`/api/rooms/:id`，默认关闭
+- 状态栏显示弹幕格式、当前时间
 
 ### 变更
 
-- 统一单/多房间模式，删除 `start_single_room()`，所有入口统一走 `main_multi()`，单房间也有热加载
-- 移除 `BARRAGE` 自定义日志级别，弹幕消息统一使用 `DEBUG` 级别
-- 移除 JSONL 输出格式，仅保留 CSV + SQLite
-- 移除 `proxy` 代理配置
-- 移除 `multi_room` 参数和单房间光标动画，统一使用多行状态面板
-- 日志文件改为按大小轮转（`RotatingFileHandler`，5MB × 3 份）
-- CSV `time` 字段格式从 `HH:MM:SS` 改为 `YYYY-MM-DD HH:MM:SS`
-- 简化日志输出：移除 ANSI 转义码、`\r` 单行刷新等终端控制逻辑
-- 数据目录命名从 `{live_id}` 改为 `{主播名}`，会话目录格式改为 `YYYYMMDD_HHMM`
-- 网络、重连、统计配置改为硬编码常量（从 config.yaml 移除），`max_reconnects` 3→5，`reconnect_base_delay` 2→8，`rcvbuf_kb` 256→512
-- `file_format` 改为 `csv` / `sqlite` 两个独立布尔开关，`gift_combo_final`/`csv`/`sqlite`/`file_dir` 从 `output` 拆出为独立的 `format` 配置段
-- `cookie_file` 改为硬编码 `cookie.txt`（从 config.yaml 移除）
-- 修复 `_save_room_info()` 用 `live_id` 做目录名的 bug，改为 `anchor_name`（与 DataRecorder 一致）
-- 移除死代码：`safe_time()`、`_state_json()`、`_log_status()`
-- 网络常量不再赋值给实例变量，直接使用类常量
-- `DataRecorder.open()` 移除未使用的 `room_id` 参数
+- Cookie 登录用户名隐藏显示（`一***`）
+- 移除 `config.yaml` 中 `log_level`，默认 INFO，调试用 `--log-level DEBUG`
+- `barrage.file_dir` + `record.file_dir` 合并为顶层 `output_dir`
+- 控制台改为单行状态行模式（5s 间隔），取消清屏和分隔符
+- 看门狗首检 3s→30s，常规 30s→60s
+- 配置键改名：`format:` → `barrage:`
+- `recheck_delay` 从配置移除，改为内置常量
+
+### 优化
+
+- 提取 `_close_ws()`、`_query_room_api()`、`_query_room_with_fallback()`、`_refresh_ttwid()` 方法，消除重复代码
+- `sanitize_dir_name()`、`DEFAULT_CONFIG` 移至 `base/utils.py` 共享
+- 线程安全：`_close_ws()` 增加 `_ws_lock`，DataRecorder 合并锁消除竞态
+- ffmpeg stderr 捕获，退出码 255 降级为 debug
+- mp4 添加 `-movflags frag_keyframe+empty_moov`，断线后可播放
+- 重连前 API 下播检测，避免无效重连
+- 录制文件名统一 `%Y%m%d_%H%M` 格式，与弹幕目录一致，带毫秒防冲突
+- `meta.json` 不再保存推流地址（`stream_url`）
 
 ## 2026-05-28
 
 ### 新增
 
-- 新增 `gift_combo_final` 配置项，开启后礼物连击只记录最终值（x520），丢弃中间递增消息（x1, x2, ..., x519）
-- 新增 SQLite 输出格式，支持 `file_format` 配置任意格式组合（空格分隔，如 `csv sqlite`、`csv json sqlite`）
-- SQLite 数据库位于房间级目录 `data/{live_id}/barrage.db`，跨多次采集自动追加
-- SQLite `time` 字段存储 Unix 秒级时间戳（INTEGER），跨午夜无歧义，视频+弹幕同步只需简单减法
-- 数值字段（`gift_count`、`diamond_total`、`count`、`total` 等）自动映射为 SQLite INTEGER 类型
-- SQLite 采用 WAL 模式 + `synchronous=NORMAL` + 8MB 页缓存，兼顾并发安全与写入性能
+- SQLite 输出格式，WAL 模式 + INTEGER 类型字段，跨会话追加
+- `gift_combo_final` 配置项，礼物连击只记录最终值
+- 弹幕查看器前端：级联会话选择、内容搜索、排行榜统计、礼物抖币计算
+- `build_barrage.py` 数据构建脚本（CSV → JSON）
 
 ### 变更
 
-- `file_format` 配置方式变更：移除 `both`/`none` 关键字，改为任意格式名空格分隔组合（`csv json sqlite`），留空即不保存
-- 吞吐统计打印间隔默认值从 300s 调整为 60s
+- 统一单/多房间模式，所有入口走 `main_multi()`，单房间也有热加载
+- 数据目录从 `{live_id}` 改为 `{主播名}`，会话目录格式 `YYYYMMDD_HHMM`
+- 日志按大小轮转（5MB × 3 份），移除 BARRAGE 自定义级别，弹幕统一 DEBUG
+- 网络/重连配置改为硬编码常量，`max_reconnects` 3→5，`reconnect_base_delay` 2→8
+- `cookie_file` 硬编码 `cookie.txt`，`file_format` 改为 `csv`/`sqlite` 独立开关
+- 房间配置从 `config.yaml` 移至 `rooms.txt`
 
 ## 2026-05-09
 
