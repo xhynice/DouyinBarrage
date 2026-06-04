@@ -1,43 +1,47 @@
-# ==================== 输出配置 ====================
-output_dir: data                 # 统一输出目录（弹幕数据 + 录制视频 + 元数据）
+# ==================== 基础配置 ====================
+output_dir: data              # 输出目录（弹幕 + 录制 + 元数据）
+log_level: INFO               # 日志级别: DEBUG / INFO / WARNING / ERROR / NONE（CLI --log-level 优先）
 
-# ==================== 等待开播配置 ====================
-live_stop: true                  # 直播结束后是否停止退出: true=结束退出 / false=等待重开播
-live_check_interval: 160         # 未开播 HTTP 轮询间隔（秒）
+# ==================== 直播行为 ====================
+live_stop: true               # 下播后退出: true=退出 / false=等待重开播
+live_check_interval: 160      # 未开播时 HTTP 轮询间隔（秒）
 
 # ==================== 消息类型开关 ====================
+# true=采集 / false=不采集
 output:
-  chat: true                     # 弹幕
-  lucky_bag: true                # 福袋口令
-  gift: true                     # 礼物
-  like: true                     # 点赞
-  member: false                  # 进场
-  social: true                   # 关注/分享
-  rank: false                    # 排行榜
-  stats: true                    # 统计
-  fansclub: false                # 粉丝团
-  emoji: false                   # 表情
-  room: false                    # 直播间公告
-  roomstats: false               # 直播统计
-  control: true                  # 直播状态
+  chat: true                  # 弹幕
+  lucky_bag: true             # 福袋口令
+  gift: true                  # 礼物（含抖币计算）
+  like: true                  # 点赞
+  member: false               # 进场
+  social: true                # 关注/分享
+  rank: false                 # 排行榜
+  stats: true                 # 实时统计（在线人数等）
+  fansclub: false             # 粉丝团
+  emoji: false                # 表情包
+  room: false                 # 直播间公告
+  roomstats: false            # 直播统计（累计观看等）
+  control: true               # 直播状态（开始/暂停/结束）
 
-# ==================== 弹幕配置 ====================
+# ==================== 弹幕输出 ====================
 barrage:
-  gift_combo_final: true         # 礼物连击过滤: true=只记录连击最终值(x520) / false=记录每次递增
-  csv: true                      # CSV 输出
-  sqlite: false                  # SQLite 输出
+  gift_combo_final: true      # 礼物连击过滤: true=只记最终值(×520) / false=记录每次递增
+  csv: true                   # CSV 输出（UTF-8 BOM，Excel 直接打开）
+  sqlite: false               # SQLite 输出（WAL 模式，跨会话追加）
 
 # ==================== 录制配置 ====================
 record:
-  enabled: false                 # 是否同时录制直播流
-  format: ts                     # 封装格式: ts / flv / mp4
-  quality: 超清                  # 画质: 原画/超清/高清/标清/省流
-  segment_time: 0                # 分段时长（秒），0=不分段，建议 3600（1小时）
-  segment_size: 0                # 分段文件大小（MB），0=不限制，建议 2048（2GB）
-  auto_convert: true             # 录制结束后自动 ts→mp4 转码（需 ffmpeg）
+  enabled: false              # 录制开关（CLI --record 优先）
+  format: ts                  # 封装格式: ts / flv / mp4
+  quality: 原画               # 画质: 原画 / 超清 / 高清 / 标清 / 省流
+  segment_time: 0             # 分段时长（秒）: 0=不分段，建议 3600（1小时）
+  segment_size: 0             # 分段大小（MB）: 0=不限制，建议 2048（2GB）
+  auto_convert: true          # 录制结束后自动 ts→mp4 转码（需 ffmpeg）
+  recheck_delay: 10           # 下播二次确认延迟（秒）: 0=不确认
 
-# ==================== API 配置 ====================
+# ==================== HTTP API ====================
 api:
-  enabled: true                  # 是否启用 HTTP API 服务
-  host: 0.0.0.0                  # 监听地址
-  port: 8088                     # 监听端口
+  enabled: false              # API 开关
+  host: 0.0.0.0               # 监听地址
+  port: 8088                  # 监听端口
+  # 接口: GET /api/status, GET /api/rooms, GET /api/rooms/:id

@@ -15,6 +15,8 @@ import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
+from base.output import get_room_statuses
+
 logger = logging.getLogger(__name__)
 
 
@@ -53,7 +55,6 @@ def _make_handler(active_rooms_ref, rooms_lock_ref, rooms_loader):
 
         def _handle_status(self):
             """系统概览：总房间数、直播中、录制中、等待开播。"""
-            from base.output import get_room_statuses
             statuses = get_room_statuses()
 
             total = 0
@@ -80,7 +81,7 @@ def _make_handler(active_rooms_ref, rooms_lock_ref, rooms_loader):
             with rooms_lock_ref:
                 for entry in active_rooms_ref.values():
                     inst = entry.get('instance')
-                    if inst and inst._video_recorder and inst._video_recorder.is_recording:
+                    if inst and inst.get_status_dict()['is_recording']:
                         recording += 1
 
             self._json_response(200, {
@@ -94,7 +95,6 @@ def _make_handler(active_rooms_ref, rooms_lock_ref, rooms_loader):
 
         def _handle_rooms(self):
             """全部房间列表（含禁用的）。"""
-            from base.output import get_room_statuses
             statuses = get_room_statuses()
             all_rooms = rooms_loader()
 
@@ -122,14 +122,13 @@ def _make_handler(active_rooms_ref, rooms_lock_ref, rooms_loader):
                     if room_entry:
                         inst = room_entry.get('instance')
                         if inst:
-                            info = inst._room_info or {}
-                            entry['room_title'] = info.get('room_title', '')
-                            entry['room_id'] = info.get('room_id', '')
-                            entry['is_recording'] = bool(
-                                inst._video_recorder and inst._video_recorder.is_recording)
+                            sd = inst.get_status_dict()
+                            entry['room_title'] = sd['room_title']
+                            entry['room_id'] = sd['room_id']
+                            entry['is_recording'] = sd['is_recording']
                             if entry['is_recording']:
                                 entry['rec_elapsed'] = st.get('rec_elapsed', '')
-                                entry['stream_quality'] = inst._record_cfg.get('quality', '')
+                                entry['stream_quality'] = sd['record_cfg'].get('quality', '')
 
                 result.append(entry)
 
@@ -137,7 +136,6 @@ def _make_handler(active_rooms_ref, rooms_lock_ref, rooms_loader):
 
         def _handle_room_detail(self, room_id):
             """单个房间详情（含 WS 地址和流地址）。"""
-            from base.output import get_room_statuses
             statuses = get_room_statuses()
             all_rooms = rooms_loader()
 
@@ -178,18 +176,17 @@ def _make_handler(active_rooms_ref, rooms_lock_ref, rooms_loader):
             if room_entry:
                 inst = room_entry.get('instance')
                 if inst:
-                    info = inst._room_info or {}
-                    result['room_title'] = info.get('room_title', '')
-                    result['room_id'] = info.get('room_id', '')
-                    result['sec_uid'] = info.get('sec_uid', '')
-                    result['ws_url'] = inst._ws_url
-                    result['stream_url'] = inst._stream_url
-                    result['is_recording'] = bool(
-                        inst._video_recorder and inst._video_recorder.is_recording)
+                    sd = inst.get_status_dict()
+                    result['room_title'] = sd['room_title']
+                    result['room_id'] = sd['room_id']
+                    result['sec_uid'] = sd['sec_uid']
+                    result['ws_url'] = sd['ws_url']
+                    result['stream_url'] = sd['stream_url']
+                    result['is_recording'] = sd['is_recording']
                     if result['is_recording']:
                         result['rec_elapsed'] = st.get('rec_elapsed', '')
-                        result['stream_quality'] = inst._record_cfg.get('quality', '')
-                        result['record_dir'] = getattr(inst._video_recorder, '_session_dir', '')
+                        result['stream_quality'] = sd['record_cfg'].get('quality', '')
+                        result['record_dir'] = sd['record_dir']
 
             self._json_response(200, result)
 

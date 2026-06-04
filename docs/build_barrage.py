@@ -32,11 +32,11 @@ OUTPUT_DIR = os.path.join(SCRIPT_DIR, 'docs', 'data', 'barrage')
 
 
 def _resolve_data_dir():
-    """从 config.yaml 读取 file_dir，不存在则回退 'data'。"""
+    """从 config.yaml 读取 output_dir，不存在则回退 'data'。"""
     try:
         from base.utils import load_config
         cfg = load_config('config.yaml', {})
-        file_dir = cfg.get('format', {}).get('file_dir', 'data')
+        file_dir = cfg.get('output_dir', 'data')
     except Exception:
         file_dir = 'data'
     if not os.path.isabs(file_dir):
@@ -323,42 +323,37 @@ class BarrageBuilder:
             pass
         return items
 
+
+    def _compute_user_gift_diamonds(self, items, key='user_id'):
+        """按用户分组计算礼物抖币，处理连送。返回 {user: {'diamond': int, 'max_gift': item}}"""
+        user_items = defaultdict(list)
+        for item in items:
+            user_items[item.get(key, '')].append(item)
+        result = {}
+        for uid, uitems in user_items.items():
+            uitems.sort(key=lambda x: x.get('time', ''))
+            total = current_max = 0
+            max_gift_item = None
+            for item in uitems:
+                gc = int(item.get('gift_count', 0))
+                d = int(item.get('diamond_total', 0))
+                if gc == 1:
+                    total += current_max
+                    current_max = d
+                else:
+                    current_max = max(current_max, d)
+                if max_gift_item is None or d > int(max_gift_item.get('diamond_total', 0)):
+                    max_gift_item = item
+            total += current_max
+            result[uid] = {'diamond': total, 'max_gift': max_gift_item}
+        return result
+
     def compute_gift_diamond(self, session_dir):
         """计算礼物总抖币。按 gift_count 识别连送，处理乱序。"""
         items = self.read_jsonl(os.path.join(session_dir, 'gift.jsonl'))
         if not items:
             return 0
-
-        # 按用户分组
-        user_items = defaultdict(list)
-        for item in items:
-            user_items[item.get('user_id', '')].append(item)
-
-        total = 0
-        for uid, uitems in user_items.items():
-            # 按时间排序
-            uitems.sort(key=lambda x: x.get('time', ''))
-            prev_count = 0
-            current_max = 0
-            for item in uitems:
-                gc = int(item.get('gift_count', 0))
-                d = int(item.get('diamond_total', 0))
-                if gc == 1:
-                    if prev_count > 1:
-                        # gc 重置，新连送开始
-                        total += current_max
-                        current_max = d
-                    else:
-                        # 独立送
-                        total += current_max
-                        current_max = d
-                else:
-                    # gc > 1，同一次连送，取最大值
-                    current_max = max(current_max, d)
-                prev_count = gc
-            # 最后一次连送
-            total += current_max
-        return total
+        return sum(v['diamond'] for v in self._compute_user_gift_diamonds(items, 'user_id').values())
 
     def compute_total_pv(self, session_dir):
         """从 stats.jsonl 获取总观看。"""
@@ -408,31 +403,7 @@ class BarrageBuilder:
                 for item in items:
                     user_gift_items[item.get('user_name', '')].append(item)
 
-                user_gift_data = {}
-                for name, uitems in user_gift_items.items():
-                    # 按时间排序
-                    uitems.sort(key=lambda x: x.get('time', ''))
-                    prev_count = 0
-                    current_max = 0
-                    max_gift_item = None
-                    user_total = 0
-                    for item in uitems:
-                        gc = int(item.get('gift_count', 0))
-                        d = int(item.get('diamond_total', 0))
-                        if gc == 1:
-                            if prev_count > 1:
-                                user_total += current_max
-                                current_max = d
-                            else:
-                                user_total += current_max
-                                current_max = d
-                        else:
-                            current_max = max(current_max, d)
-                        if max_gift_item is None or d > int(max_gift_item.get('diamond_total', 0)):
-                            max_gift_item = item
-                        prev_count = gc
-                    user_total += current_max
-                    user_gift_data[name] = {'diamond': user_total, 'max_gift': max_gift_item}
+                user_gift_data = self._compute_user_gift_diamonds(items, 'user_name')
 
                 top_gift = sorted(user_gift_data.items(), key=lambda x: x[1]['diamond'], reverse=True)[:6]
                 top_users = []

@@ -191,7 +191,7 @@ class TextPiece(proto.Message):
 class Text(proto.Message):
     """富文本容器，由多个 TextPiece 拼接而成。"""
     key = proto.Field(proto.STRING, number=1)
-    default_patter = proto.Field(proto.STRING, number=2)
+    default_pattern = proto.Field(proto.STRING, number=2)
     default_format = proto.Field(TextFormat, number=3)
     pieces_list = proto.RepeatedField(TextPiece, number=4)
 

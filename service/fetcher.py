@@ -21,12 +21,14 @@ import logging
 import os
 import random
 import re
-import sys
 import threading
 import time
+
+# 抑制 websocket-client 库的 "Websocket connected" 原始输出
+logging.getLogger('websocket').setLevel(logging.WARNING)
 import urllib.parse
 from datetime import datetime
-from socket import SOL_SOCKET, SO_RCVBUF, setdefaulttimeout, getdefaulttimeout
+from socket import SOL_SOCKET, SO_RCVBUF
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -40,17 +42,29 @@ from base.utils import (
     load_config, load_cookies,
     USER_AGENTS, LOW_VALUE_TYPES, INTERACTIVE_TYPES, METHOD_TO_CONFIG,
     generate_user_unique_id, extract_ua_version,
-    rotate_ua,
+    rotate_ua, sanitize_dir_name, get_anchor_dir,
+    DEFAULT_CONFIG,
 )
 from base.output import setup_logger, DataRecorder, ThroughputCounter, RoomLogFilter
 from service.network import (
     fetch_ttwid, enter_room_api, download_image,
     build_http_headers,
     build_websocket_url, build_ws_cookie,
+    resolve_live_id,
+    scrape_room_info,
+    fetch_webcast_cursor,
+    RoomNotFoundError,
 )
 from service.signer import generate_signature
+from service.recorder import DouyinRecorder, check_ffmpeg
+from base.stream import select_stream_url
 
 logger = logging.getLogger(__name__)
+
+# setdefaulttimeout 是全局操作，所有房间共用同一超时值，在模块加载时设置一次即可
+# run_forever 内部每次重连都会读取 getdefaulttimeout()，因此不能设为 None
+from socket import setdefaulttimeout as _setdefaulttimeout
+_setdefaulttimeout(30)  # WS_CONNECT_TIMEOUT 的默认值
 
 
 class DouyinBarrage:
@@ -67,7 +81,7 @@ class DouyinBarrage:
     HTTP_TIMEOUT = 15              # HTTP 超时（秒），超时后自动 ×1.5，封顶 60s，最多重试 3 次
     WS_CONNECT_TIMEOUT = 30        # WebSocket 底层 socket 超时（秒）
     SILENCE_TIMEOUT = 60           # 看门狗静默阈值（秒）
-    HEARTBEAT_INTERVAL = 10        # 心跳间隔（秒）
+    HEARTBEAT_INTERVAL = 5         # 心跳间隔（秒）
     RCVBUF_KB = 512                # 接收缓冲区（KB）
     MAX_RECONNECTS = 5             # 最大重连次数（0 = 无限）
     RECONNECT_BASE_DELAY = 8       # 重连基础延迟（秒），指数退避：8s → 16s → 32s → ...
@@ -76,23 +90,8 @@ class DouyinBarrage:
 
     COOKIE_FILE = 'cookie.txt'     # Cookie 文件路径（硬编码）
 
-    # 统一默认配置
-    _DEFAULT_CONFIG = {
-        'log_level': 'INFO',
-        'output': {
-            'chat': True, 'lucky_bag': True, 'gift': True, 'like': True,
-            'member': True, 'social': True, 'rank': True, 'stats': True,
-            'fansclub': True, 'emoji': True, 'room': True, 'roomstats': True,
-            'control': True,
-        },
-        'format': {
-            'gift_combo_final': False,
-            'csv': False, 'sqlite': False,
-            'file_dir': 'data',
-        },
-        'live_stop': False,
-        'live_check_interval': 30,
-    }
+    # 统一默认配置（定义在 base.utils，此处引用保持兼容）
+    _DEFAULT_CONFIG = DEFAULT_CONFIG
 
     def __init__(self, live_id, config_file='config.yaml', log_level=None, on_room_info=None):
         """初始化采集器。
@@ -116,12 +115,13 @@ class DouyinBarrage:
         )
 
         self._enable_outputs = self.config.get('output', {})
-        self._format_cfg = self.config.get('format', {})
+        self._barrage_cfg = self.config.get('barrage', {})
 
         # ── UA（一次选定，全局一致）──
         self._ua = random.choice(USER_AGENTS)
         self._ua_version = extract_ua_version(self._ua)
         self._user_unique_id = generate_user_unique_id()
+        self._uid_ever_used = False
 
         # 网络超时参数直接使用类常量
 
@@ -147,12 +147,20 @@ class DouyinBarrage:
             logger.info("[启动] 未加载 cookie.txt，以游客身份采集（礼物等信息可能受限）")
 
         # ── 直播间 ──
-        self.live_id = live_id
+        try:
+            self.live_id = resolve_live_id(live_id, self.session, http_timeout=self.HTTP_TIMEOUT)
+            if self.live_id != live_id:
+                logger.info(f"[解析] 输入「{live_id}」→ web_rid: {self.live_id}")
+        except ValueError as e:
+            logger.error(f"[解析] 直播间地址解析失败: {e}")
+            self.live_id = live_id
 
         # ── 连接状态 ──
         self.ws = None
+        self._ws_lock = threading.Lock()
         self._connected_event = threading.Event()
         self._stop_event = threading.Event()
+        self._stop_reason = ''  # 停止原因: ''=正常, 'room_not_found'=房间不存在
         self._conn_stop = threading.Event()
 
         # ── 线程引用 ──
@@ -173,7 +181,7 @@ class DouyinBarrage:
         self._counter = ThroughputCounter()
 
         # ── 数据记录器（首次连接后初始化）──
-        self._recorder = None
+        self._data_recorder = None
 
 
         # ── 连接重试 ──
@@ -198,6 +206,12 @@ class DouyinBarrage:
         # ── 预计算 enable_outputs 缓存（_wsOnOpen 中更新）──
         self._eo_cached = dict(self._enable_outputs)
 
+        # ── 录制配置 ──
+        self._record_cfg = self.config.get('record', {})
+        self._video_recorder = None
+        self._ws_url = ''
+        self._stream_url = ''
+
         # ── 面板刷新节流 ──
         self._panel_last = 0.0
 
@@ -209,6 +223,30 @@ class DouyinBarrage:
     def display_name(self):
         """显示用名称：优先主播名，降级为 live_id。"""
         return self.anchor_name or self.live_id
+
+    def get_status_dict(self):
+        """返回实例状态摘要（供外部 API 使用，避免直接访问私有属性）。
+
+        Returns:
+            dict: 包含 room_info, ws_url, stream_url, is_recording,
+                  rec_elapsed, record_cfg 等字段。
+        """
+        info = self._room_info or {}
+        is_recording = bool(
+            self._video_recorder and self._video_recorder.is_recording
+        )
+        rec_elapsed = self._video_recorder.elapsed if is_recording else 0
+        return {
+            'room_title': info.get('room_title', ''),
+            'room_id': info.get('room_id', ''),
+            'sec_uid': info.get('sec_uid', ''),
+            'ws_url': self._ws_url,
+            'stream_url': self._stream_url,
+            'is_recording': is_recording,
+            'rec_elapsed': rec_elapsed,
+            'record_cfg': dict(self._record_cfg),
+            'record_dir': getattr(self._video_recorder, '_session_dir', '') if is_recording else '',
+        }
 
     # ── 懒加载属性 ────────────────────────────────
 
@@ -253,7 +291,11 @@ class DouyinBarrage:
 
         if self._login_info['is_login']:
             nick = self._login_info['nickname']
-            logger.info(f"[房间] 已登录「{nick}」")
+            if nick and len(nick) > 2:
+                hidden_nick = nick[:2] + '*' * (len(nick) - 2)
+            else:
+                hidden_nick = '*' * len(nick) if nick else '***'
+            logger.info(f"[房间] 已登录「{hidden_nick}」")
             if expire_date:
                 logger.info(f"[房间] Cookie 有效期至 {expire_date}")
         elif has_cookie:
@@ -289,6 +331,11 @@ class DouyinBarrage:
 
     # ── 启动 / 停止 ──────────────────────────────
 
+    @property
+    def stop_reason(self):
+        """停止原因: ''=正常, 'room_not_found'=房间不存在。"""
+        return self._stop_reason
+
     def start(self):
         """启动采集，进入 WebSocket 连接主循环。"""
         logger.debug(f"[启动] live_id: {self.live_id}")
@@ -314,21 +361,14 @@ class DouyinBarrage:
         self._connected_event.clear()
         self._stop_monitor_loop()
         self._queue_handler.clear_room_status(self.live_id)
-        if self.ws:
-            try:
-                self.ws.keep_running = False
-                # 强制关闭底层 socket，避免 close() 阻塞在发送 close frame 上
-                if self.ws.sock:
-                    self.ws.sock.close()
-                self.ws.close()
-            except Exception as e:
-                logger.debug(f"[连接] WebSocket 关闭异常: {e}")
+        self._close_ws()
         for t in (self._heartbeat_thread, self._watchdog_thread, self._stats_thread):
             if t and t.is_alive():
                 t.join(timeout=3)
         logger.info(f"[统计] 最终: {self._counter.report()}")
-        if self._recorder:
-            self._recorder.close()
+        if self._data_recorder:
+            self._data_recorder.close()
+        self._stop_recording()
         # 多实例共享 QueueHandler，不在此处关闭（由进程退出统一清理）
         # 单实例模式下 stop() 后进程通常也退出，无需显式关闭
 
@@ -355,16 +395,7 @@ class DouyinBarrage:
         )
         self._counter = ThroughputCounter()
         self._reset_recorder()
-        if self.ws:
-            try:
-                self.ws.keep_running = False
-                # 强制关闭底层 socket，避免 close() 阻塞
-                if self.ws.sock:
-                    self.ws.sock.close()
-                self.ws.close()
-            except Exception as e:
-                logger.debug(f"[连接] 等待模式关闭异常：{e}")
-
+        self._close_ws()
         self._start_monitor_loop()
 
     def _is_waiting_live(self):
@@ -378,12 +409,141 @@ class DouyinBarrage:
 
     def _reset_recorder(self):
         """关闭并重建数据记录器（幂等操作）。"""
-        if self._recorder:
+        if self._data_recorder:
             try:
-                self._recorder.close()
+                self._data_recorder.close()
             except Exception as e:
                 logger.debug(f"[数据] 关闭旧 recorder 异常: {e}")
-        self._recorder = DataRecorder(self.anchor_name, self.live_id, self.config)
+        if self._video_recorder:
+            try:
+                self._video_recorder.stop()
+                self._video_recorder = None
+            except Exception as e:
+                logger.debug(f"[录制] 停止录制异常: {e}")
+        self._data_recorder = DataRecorder(self.anchor_name, self.live_id, self.config)
+
+    # ── 录制管理 ────────────────────────────────
+
+    def _start_recording(self):
+        """启动视频录制（如果启用）。"""
+        if not self._record_cfg.get('enabled', False):
+            return
+        if not self._room_info:
+            return
+
+        stream_info = select_stream_url(
+            self._room_info,
+            quality_name=self._record_cfg.get('quality', '原画'),
+            check_health=True,
+        )
+        if not stream_info.get('is_live') or not stream_info.get('record_url'):
+            logger.warning(f"[录制] {self.display_name} 无可用推流地址")
+            return
+
+        output_dir = self.config.get('output_dir', 'data')
+        # 使用弹幕数据的会话目录，让录制文件放在同一目录下
+        session_dir = self._data_recorder.session_dir if self._data_recorder else None
+        if self._video_recorder is None:
+            self._video_recorder = DouyinRecorder(
+                self.live_id, self.anchor_name,
+                stream_url_provider=self._refresh_stream_url,
+                live_status_provider=self.check_live_status,
+                output_dir=output_dir,
+                session_dir=session_dir,
+            )
+        self._video_recorder.anchor_name = self.anchor_name
+        self._video_recorder.start(stream_info['record_url'], self._record_cfg)
+        self._stream_url = stream_info['record_url']
+        quality = stream_info.get('quality', '?')
+        logger.info(f"[录制] {self.display_name} 画质={quality} 地址={stream_info['record_url'][:60]}...")
+        self._queue_handler.set_room_status(
+            self.live_id, 'collecting',
+            anchor=self.display_name,
+            msg_count=0,
+            elapsed=0,
+            rec_elapsed=0,
+        )
+
+    def _stop_recording(self):
+        """停止视频录制。"""
+        if self._video_recorder:
+            self._video_recorder.stop()
+            self._video_recorder = None
+
+    # ── API 方法提取 ──────────────────────────────
+
+    def query_room_api(self):
+        """统一调用 enter_room_api，返回房间信息字典。
+
+        替代之前 6 处重复的 enter_room_api(self.ttwid, self._ua, ...) 调用。
+
+        Returns:
+            dict: 房间信息（room_id, status, anchor_name, ...）
+        Raises:
+            RuntimeError: ttwid 获取失败时。
+            ValueError: API 返回异常时。
+        """
+        return enter_room_api(
+            self.ttwid, self._ua, self._ua_version,
+            self.live_id, self.HTTP_TIMEOUT, session=self.session,
+        )
+
+    def query_room_with_fallback(self):
+        """主 API + 备用 API 降级查询房间状态。
+
+        先调 room/web/enter，失败后用 scrape_room_info 备用。
+        供 refresh_stream_url 和 check_live_status 共用。
+
+        Returns:
+            dict: 房间信息，失败返回 None。
+        """
+        try:
+            info = self.query_room_api()
+            return info
+        except RoomNotFoundError:
+            raise  # 房间不存在，不尝试备用 API
+        except Exception as e:
+            logger.debug(f"[房间] 主 API 失败: {e}，尝试备用 API")
+
+        try:
+            info = scrape_room_info(self.session, self.live_id, self.HTTP_TIMEOUT)
+            if info:
+                logger.info(f"[房间] 备用 API 获取成功: status={info.get('status')}")
+                return info
+        except Exception as e:
+            logger.debug(f"[房间] 备用 API 也失败: {e}")
+
+        return None
+
+    def refresh_ttwid(self):
+        """刷新 ttwid（统一处理 RuntimeError 异常）。
+
+        Returns:
+            bool: 刷新成功返回 True，失败返回 False。
+        """
+        self._ttwid = None
+        try:
+            _ = self.ttwid
+            logger.info("[房间] ttwid 刷新成功")
+            return True
+        except RuntimeError as e:
+            logger.error(f"[房间] ttwid 刷新失败: {e}")
+            return False
+
+    def check_live_status(self):
+        """检查当前直播状态（供录制器下播二次确认）。
+
+        Returns:
+            True: 仍在直播。
+            False: 已下播。
+            None: 无法确认（API 异常）。
+        """
+        info = self.query_room_with_fallback()
+        if info is None:
+            return None
+        if info.get('status') == 2:
+            return True
+        return False
 
     def _start_monitor_loop(self):
         """启动等待开播的监控循环（HTTP 轮询 + 状态通知）。
@@ -406,15 +566,17 @@ class DouyinBarrage:
                     return
                 while not stop_event.is_set() and not self._stop_event.is_set():
                     try:
-                        info = enter_room_api(
-                            self.ttwid, self._ua, self._ua_version,
-                            self.live_id, self.HTTP_TIMEOUT, session=self.session,
-                        )
+                        info = self.query_room_api()
                         if info['status'] == 2:
                             self._room_id = info['room_id']
                             self._room_info = info
                             self._on_live_started(source='api')
                             return
+                    except RoomNotFoundError as e:
+                        logger.error(f'[监控] {e}，停止监控')
+                        self._stop_reason = 'room_not_found'
+                        self._stop_event.set()
+                        return
                     except Exception as e:
                         logger.warning(f'[监控] API 检查失败: {e}')
                         if any(kw in str(e).lower() for kw in ('sign', '403', 'unauthorized', 'cookie')):
@@ -431,7 +593,9 @@ class DouyinBarrage:
                             break
                         time.sleep(0.5)
             finally:
-                self._queue_handler.clear_room_status(self.live_id)
+                # 仅在仍在等待模式时清除状态（_on_live_started 会设 _waiting_live=False）
+                if self._is_waiting_live():
+                    self._queue_handler.clear_room_status(self.live_id)
                 done_event.set()
                 if self._monitor_stop is stop_event:
                     self._monitor_stop = None
@@ -476,6 +640,20 @@ class DouyinBarrage:
 
     # ── WebSocket 连接循环 ────────────────────────
 
+    def _close_ws(self):
+        """安全关闭 WebSocket 连接（线程安全）。"""
+        with self._ws_lock:
+            if not self.ws:
+                return
+            try:
+                self.ws.keep_running = False
+                if self.ws.sock:
+                    self.ws.sock.close()
+                self.ws.close()
+            except Exception:
+                pass
+            self.ws = None
+
     def _connectWebSocket(self):
         """WebSocket 连接主循环，包含重连逻辑。
 
@@ -497,10 +675,7 @@ class DouyinBarrage:
 
                 # ── 状态感知（每次重新获取 room_id，主播重开播可能换 ID）──
                 self._room_id = None
-                info = enter_room_api(
-                    self.ttwid, self._ua, self._ua_version,
-                    self.live_id, self.HTTP_TIMEOUT, session=self.session,
-                )
+                info = self.query_room_api()
                 self._room_id = info['room_id']
                 self._room_info = info
 
@@ -513,8 +688,8 @@ class DouyinBarrage:
                 if self._on_room_info and self._reconnect_count == 0:
                     try:
                         self._on_room_info(self.live_id, info.get('anchor_name', ''))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"[房间] on_room_info 回调异常: {e}")
                 status = info['status']
 
                 if status != 2:
@@ -523,12 +698,8 @@ class DouyinBarrage:
                     # 刷新 ttwid（如果之前标记了需要刷新）
                     if self._ttwid_refresh_needed:
                         self._ttwid_refresh_needed = False
-                        self._ttwid = None
-                        try:
-                            _ = self.ttwid
-                            logger.info("[房间] ttwid 刷新成功")
-                        except RuntimeError as e:
-                            logger.error(f"[房间] ttwid 刷新失败: {e}，无法继续连接，请检查网络")
+                        if not self.refresh_ttwid():
+                            logger.error("[房间] ttwid 刷新失败，无法继续连接，请检查网络")
                             break
                     # 进入等待模式（不输出日志，由单行动态显示替代）
                     if not self._is_waiting_live():
@@ -548,12 +719,8 @@ class DouyinBarrage:
                         # 同时刷新 ttwid 和 user_unique_id，避免使用等待期间被污染的旧参数
                         logger.info("[连接] 检测到开播，等待 5 秒后建立 WebSocket（让服务端路由就绪）")
                         time.sleep(5)
-                        self._ttwid = None
-                        try:
-                            _ = self.ttwid
-                            logger.info("[连接] ttwid 已刷新")
-                        except RuntimeError as e:
-                            logger.warning(f"[连接] ttwid 刷新失败: {e}，使用现有值继续")
+                        if not self.refresh_ttwid():
+                            logger.warning("[连接] ttwid 刷新失败，使用现有值继续")
                     label = self.display_name
                     logger.info(f'[房间] {label} 直播中')
                     if not self._is_waiting_live():
@@ -567,32 +734,51 @@ class DouyinBarrage:
                 # ttwid 签名校验失败时自动刷新
                 if self._ttwid_refresh_needed:
                     self._ttwid_refresh_needed = False
-                    self._ttwid = None
-                    try:
-                        _ = self.ttwid
-                        logger.info("[房间] ttwid 刷新成功")
-                    except RuntimeError as e:
-                        logger.error(f"[房间] ttwid 刷新失败: {e}，无法继续连接，请检查网络")
+                    if not self.refresh_ttwid():
+                        logger.error("[房间] ttwid 刷新失败，无法继续连接，请检查网络")
                         break
 
                 # 每次 WebSocket 连接前重新生成 user_unique_id，避免被之前 HTTP 轮询的行为污染
                 old_uid = self._user_unique_id
                 self._user_unique_id = generate_user_unique_id()
-                logger.info(f"[连接] user_unique_id 已刷新: {old_uid} → {self._user_unique_id}")
+                if self._uid_ever_used:
+                    logger.info(f"[连接] user_unique_id 已刷新: {old_uid} → {self._user_unique_id}")
+                else:
+                    logger.info(f"[连接] 生成 user_unique_id: {self._user_unique_id}")
+                    self._uid_ever_used = True
+
+                # 预请求获取服务端 cursor + internalExt（提高连接稳定性）
+                cursor, internal_ext = None, None
+                try:
+                    cursor, internal_ext = fetch_webcast_cursor(
+                        self.session, self._room_id, self._user_unique_id,
+                        self.ttwid, self._ua, self._login_cookies, self.HTTP_TIMEOUT,
+                    )
+                    if cursor:
+                        logger.info(f"[预请求] 获取 cursor 成功 (长度={len(cursor)})")
+                except Exception as e:
+                    logger.debug(f"[预请求] 获取 cursor 失败: {e}")
 
                 # 构建 WebSocket URL 并签名
-                wss = build_websocket_url(self._room_id, self._user_unique_id, self._ua_version)
+                wss = build_websocket_url(self._room_id, self._user_unique_id, self._ua_version,
+                                          cursor=cursor, internal_ext=internal_ext)
                 signature = generate_signature(self._room_id, self._user_unique_id)
                 if not signature:
                     logger.error("[签名] X-Bogus 签名生成失败，Node.js 未安装或 sign.js 异常，停止采集")
                     break
                 wss += f"&signature={signature}"
+                self._ws_url = wss
                 logger.debug(f"[签名] 生成: signature='{signature}', 长度={len(signature)}, "
                              f"user_unique_id={self._user_unique_id}, room_id={self._room_id}")
 
                 headers = {
                     "cookie": build_ws_cookie(self.ttwid, self._login_cookies),
                     "user-agent": self._ua,
+                    "Pragma": "no-cache",
+                    "Cache-Control": "no-cache",
+                    "Upgrade": "websocket",
+                    "Connection": "Upgrade",
+                    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
                 }
                 logger.debug(f"[连接] WS Cookie 前 80 字符: {headers['cookie'][:80]}...")
 
@@ -605,22 +791,24 @@ class DouyinBarrage:
                     on_close=self._wsOnClose,
                 )
 
-                # 临时设置全局 socket 超时，确保 TCP connect 不会无限阻塞
-                # run_forever 内部通过 getdefaulttimeout() 获取此值
-                old_timeout = getdefaulttimeout()
-                setdefaulttimeout(self.WS_CONNECT_TIMEOUT)
+                # socket 超时已在模块初始化时通过 setdefaulttimeout(30) 全局设置
+                # run_forever 内部每次重连都会读取 getdefaulttimeout()
                 try:
                     self.ws.run_forever(
-                    sockopt=((SOL_SOCKET, SO_RCVBUF, (self.RCVBUF_KB * 1024)),),
-                    ping_interval=30,
-                    ping_timeout=10,
-                    origin='https://live.douyin.com',
-                )
+                        sockopt=((SOL_SOCKET, SO_RCVBUF, (self.RCVBUF_KB * 1024)),),
+                        ping_interval=0,
+                        ping_timeout=10,
+                        origin='https://live.douyin.com',
+                    )
                 finally:
-                    setdefaulttimeout(old_timeout)
+                    pass
 
             except RuntimeError as e:
                 logger.error(f"[连接] WebSocket 不可恢复错误，停止采集: {e}")
+                break
+            except RoomNotFoundError as e:
+                logger.error(f"[房间] {e}，停止采集")
+                self._stop_reason = 'room_not_found'
                 break
             except ValueError as e:
                 err_str = str(e)
@@ -630,6 +818,17 @@ class DouyinBarrage:
                 logger.error(f"[网络] API 异常: {e}")
             except Exception as e:
                 logger.error(f"[连接] WebSocket 异常: {e}")
+
+            # ── 重连前快速检测直播间状态，下播则直接进入等待模式 ──
+            if not self._is_waiting_live() and not self._stop_event.is_set():
+                try:
+                    check_info = self.query_room_api()
+                    if check_info.get('status') != 2:
+                        logger.info(f"[连接] 直播间已下播，进入等待模式")
+                        self._enter_wait_mode()
+                        continue
+                except Exception:
+                    pass
 
             self._connected_event.clear()
 
@@ -654,6 +853,8 @@ class DouyinBarrage:
                            f"{'/' + str(max_reconnects) if max_reconnects > 0 else ''})")
             self._stop_event.wait(timeout=delay)
 
+        # 清理录制进程（重连耗尽或不可恢复错误时不会走到 _enter_wait_mode/stop）
+        self._stop_recording()
         logger.info("[控制] 采集主循环退出")
         self._queue_handler.clear_room_status(self.live_id)
 
@@ -666,10 +867,12 @@ class DouyinBarrage:
         while not conn_stop.is_set() and not self._stop_event.is_set():
             try:
                 if self._connected_event.is_set():
-                    self.ws.send(
-                        PushFrame(payload_type="hb")._pb.SerializeToString(),
-                        websocket.ABNF.OPCODE_BINARY,
-                    )
+                    ws = self.ws  # 局部快照，防止 close_ws 置 None
+                    if ws:
+                        ws.send(
+                            PushFrame(payload_type="hb")._pb.SerializeToString(),
+                            websocket.ABNF.OPCODE_BINARY,
+                        )
             except Exception:
                 break
             conn_stop.wait(timeout=interval + random.uniform(0, 2))
@@ -677,21 +880,23 @@ class DouyinBarrage:
     def _watchdog_loop(self):
         """看门狗线程，检测静默断连。
 
-        首次检测：连接后 3 秒内检测是否有业务消息，无则快速重连
-        后续检测：30 秒无业务消息触发重连
+        首次检测：30 秒无业务消息触发快速重连（过滤假活）
+        后续检测：60 秒无业务消息触发重连
         完全无数据：使用 silence_timeout 配置
         """
         conn_stop = self._conn_stop
         check_interval = max(min(self.SILENCE_TIMEOUT // 3, 10), 3)
         logger.debug(f"[看门狗] 线程启动，检查间隔={check_interval}s，超时阈值={self.SILENCE_TIMEOUT}s")
-        watchdog_start = time.time()
+        watchdog_start = time.monotonic()
         first_check_done = False
-        first_check_timeout = 3.0
-        normal_check_timeout = 30.0
+        first_check_timeout = 30.0
+        normal_check_timeout = 60.0
         try:
             while not conn_stop.is_set() and not self._stop_event.is_set():
                 conn_stop.wait(timeout=check_interval)
                 if not self._connected_event.is_set():
+                    if self._stop_event.is_set() or conn_stop.is_set():
+                        break
                     elapsed = time.time() - watchdog_start
                     if elapsed > self.SILENCE_TIMEOUT:
                         logger.warning(f"[看门狗] 连接建立超时 ({elapsed:.0f}s)，强制重连")
@@ -711,46 +916,27 @@ class DouyinBarrage:
                 logger.debug(f"[看门狗] 静默时间: {silence:.0f}s")
                 if silence > self.SILENCE_TIMEOUT:
                     logger.warning(f"[看门狗] {silence:.0f}s 无数据 (阈值={self.SILENCE_TIMEOUT}s)，触发重连")
-                    try:
-                        self.ws.keep_running = False
-                        if self.ws.sock:
-                            self.ws.sock.close()
-                        self.ws.close()
-                    except Exception:
-                        pass
+                    self._close_ws()
                     break
 
-                if self._last_business_msg_time > 0:
-                    with self._last_business_msg_time_lock:
+                with self._last_business_msg_time_lock:
+                    if self._last_business_msg_time > 0:
                         business_silence = time.time() - self._last_business_msg_time
-                else:
-                    business_silence = time.time() - getattr(self, '_ws_connected_at', time.time())
+                    else:
+                        business_silence = time.time() - getattr(self, '_ws_connected_at', time.time())
 
                 if not first_check_done:
-                    if business_silence > first_check_timeout:
-                        logger.info(f"[看门狗] 首次检测 {business_silence:.0f}s 无业务消息，快速重连")
-                        first_check_done = True
-                        try:
-                            self.ws.keep_running = False
-                            if self.ws.sock:
-                                self.ws.sock.close()
-                            self.ws.close()
-                        except Exception:
-                            pass
-                        break
-                    elif self._last_business_msg_time > 0:
+                    if self._last_business_msg_time > 0:
                         first_check_done = True
                         logger.debug("[看门狗] 首次检测通过，已收到业务消息")
+                    elif business_silence > first_check_timeout:
+                        logger.info(f"[看门狗] {business_silence:.0f}s 无业务消息 (首次检测超时 {first_check_timeout:.0f}s)，快速重连")
+                        self._close_ws()
+                        break
                 else:
                     if business_silence > normal_check_timeout:
                         logger.info(f"[看门狗] {business_silence:.0f}s 无业务消息 (仅有低价值消息)，触发重连")
-                        try:
-                            self.ws.keep_running = False
-                            if self.ws.sock:
-                                self.ws.sock.close()
-                            self.ws.close()
-                        except Exception:
-                            pass
+                        self._close_ws()
                         break
         except Exception as e:
             logger.error(f"[看门狗] 线程异常: {e}")
@@ -770,9 +956,8 @@ class DouyinBarrage:
         if not self._room_info:
             return
 
-        file_dir = self._format_cfg.get('file_dir', 'data')
-        dir_name = DataRecorder._sanitize_dir_name(self.anchor_name) or self.live_id
-        room_dir = os.path.join(file_dir, dir_name)
+        output_dir = self.config.get('output_dir', 'data')
+        room_dir = get_anchor_dir(output_dir, self.anchor_name, self.live_id)
         meta_file = os.path.join(room_dir, 'meta.json')
 
         if os.path.exists(meta_file):
@@ -781,10 +966,13 @@ class DouyinBarrage:
         try:
             os.makedirs(room_dir, exist_ok=True)
 
+            # 过滤掉推流地址等敏感信息
+            safe_info = {k: v for k, v in self._room_info.items()
+                         if k not in ('stream_url',)}
             meta = {
                 'live_id': self.live_id,
                 'anchor_name': self.anchor_name,
-                **{k: v for k, v in self._room_info.items() if k != 'stream_url'},
+                **safe_info,
                 'saved_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             }
 
@@ -802,6 +990,28 @@ class DouyinBarrage:
         except Exception as e:
             logger.warning(f"[数据] 保存主播信息失败: {e}")
 
+    def _refresh_stream_url(self):
+        """重新调 API 获取最新推流地址（多 API 降级）。
+
+        Returns:
+            str: 推流地址（直播中）。
+            False: 明确已下播，停止重试。
+            None: API 调用失败，保留旧地址继续重试。
+        """
+        info = self.query_room_with_fallback()
+        if info is None:
+            logger.debug(f"[录制] 刷新推流地址失败: 所有 API 均失败")
+            return None
+        if info.get('status') != 2:
+            logger.info(f"[录制] {self.display_name} 已下播，停止重试")
+            return False
+        stream_info = select_stream_url(info, self._record_cfg.get('quality', '原画'), check_health=False, quiet=True)
+        if stream_info.get('is_live'):
+            logger.info(f"[录制] 已刷新推流地址 (画质 {stream_info['quality']})")
+            self._stream_url = stream_info['record_url']
+            return stream_info['record_url']
+        return None
+
     def _wsOnOpen(self, ws):
         """WebSocket 连接成功回调。
 
@@ -812,13 +1022,13 @@ class DouyinBarrage:
         self._connected_event.set()
         with self._last_msg_time_lock:
             self._last_msg_time = time.time()
-        # _last_business_msg_time 保持为 0，等第一条真正的业务消息到达时才更新
-        # 这样看门狗能正确检测"连接成功但无业务消息"的假活状态
+        with self._last_business_msg_time_lock:
+            self._last_business_msg_time = 0.0
         self._ws_connected_at = time.time()  # 连接建立时间，看门狗用于计算业务沉默
 
         # 预计算 parser 配置（消息开关 + 格式/行为配置，每连接刷新一次）
         self._eo_cached = dict(self._enable_outputs)
-        self._eo_cached['gift_combo_final'] = self._format_cfg.get('gift_combo_final', False)
+        self._eo_cached['gift_combo_final'] = self._barrage_cfg.get('gift_combo_final', False)
         self._eo_cached['live_stop'] = self.config.get('live_stop', False)
 
         # 停止旧连接的线程，重建连接级停止信号
@@ -843,12 +1053,15 @@ class DouyinBarrage:
         self._stats_thread.start()
 
         # 初始化 recorder（此时 anchor_name 已通过 enter_room_api 获取）
-        if self._recorder is None:
-            self._recorder = DataRecorder(self.anchor_name, self.live_id, self.config)
-        self._recorder.open()
+        if self._data_recorder is None:
+            self._data_recorder = DataRecorder(self.anchor_name, self.live_id, self.config)
+        self._data_recorder.open()
 
         # 首次连接时保存主播信息和下载图片
         self._save_room_info()
+
+        # 启动视频录制（如果启用）
+        self._start_recording()
 
     def _wsOnMessage(self, ws, message):
         """WebSocket 消息回调，处理流程：PushFrame → gzip → Response → 分发。
@@ -925,18 +1138,20 @@ class DouyinBarrage:
                             self._last_business_msg_time = time.time()
                             if prev == 0:
                                 delay = time.time() - getattr(self, '_ws_connected_at', 0)
-                                logger.info(f"[连接] 开始采集 首条业务消息到达: {msg.method} (连接后 {delay:.1f}s)")
+                                logger.info(f"[连接] 开始采集 首条业务消息到达: {msg.method} (连接后 {delay:.1f}s, {time.strftime('%H:%M:%S')})")
 
                     # 每 3 秒刷新一次面板（节流，避免每条消息都更新）
                     now = time.monotonic()
                     if now - self._panel_last >= 3.0:
                         self._panel_last = now
                         elapsed = now - self._counter._start
+                        rec_elapsed = self._video_recorder.elapsed if self._video_recorder else 0
                         self._queue_handler.set_room_status(
                             self.live_id, 'collecting',
                             anchor=self.display_name,
                             msg_count=self._counter._count,
                             elapsed=elapsed,
+                            rec_elapsed=rec_elapsed,
                         )
 
                     for r in results:
@@ -957,15 +1172,12 @@ class DouyinBarrage:
 
                         rec_type = r.get('type', '')
                         rec_data = r.get('data')
-                        if rec_type and rec_type != '_log_only' and rec_data and self._recorder:
-                            self._recorder.record(rec_type, rec_data)
+                        if rec_type and rec_type != '_log_only' and rec_data and self._data_recorder:
+                            self._data_recorder.record(rec_type, rec_data)
 
                 except Exception as e:
                     logger.error(f"[数据] 处理 {msg.method} 失败: {e}")
 
-                # 等待开播检测：收到交互消息 = 开播
-                if self._is_waiting_live() and msg.method in INTERACTIVE_TYPES:
-                    self._on_live_started(source='ws')
             else:
                 if msg.method in LOW_VALUE_TYPES:
                     logger.debug(f"[数据] 低价值消息（跳过）: {msg.method}")

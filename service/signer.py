@@ -15,7 +15,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
-import urllib.parse
+import atexit
 
 from base.utils import (
     SCRIPT_DIR, APP_ID, LIVE_ID, VERSION_CODE,
@@ -49,6 +49,14 @@ if (typeof process !== 'undefined' && process.stdin) {
     });
 }
 '''
+
+
+def _cleanup_tmp(path):
+    """进程退出时清理临时 sign.js 文件。"""
+    try:
+        os.remove(path)
+    except OSError:
+        pass
 
 
 def _ensure_sign_js():
@@ -92,6 +100,7 @@ def _ensure_sign_js():
             f.write(_STDIN_WRAPPER)
 
         _SIGN_JS_PATCHED = tmp_path
+        atexit.register(lambda: _cleanup_tmp(tmp_path))
         logger.debug(f"[签名] 已复制 sign.js 到临时目录: {tmp_path}")
         return _SIGN_JS_PATCHED
 

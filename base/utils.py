@@ -5,8 +5,11 @@
 """
 
 import os
+import logging
 import random
 import re
+import shutil
+import tempfile
 import threading
 import time
 
@@ -77,10 +80,24 @@ _last_ua_switch_time = 0.0
 
 # ── 配置加载 ──────────────────────────────────────
 
-def load_config(config_file, default_config):
-    """加载 YAML 配置文件，与默认配置做浅合并。
+def _deep_merge(base, override):
+    """递归合并两个字典，override 中的值覆盖 base。
 
-    字典类型的配置项（如 output）做一层嵌套合并，
+    嵌套字典递归合并，非字典类型直接覆盖。
+    """
+    result = dict(base)
+    for k, v in override.items():
+        if isinstance(v, dict) and isinstance(result.get(k), dict):
+            result[k] = _deep_merge(result[k], v)
+        else:
+            result[k] = v
+    return result
+
+
+def load_config(config_file, default_config):
+    """加载 YAML 配置文件，与默认配置做深度合并。
+
+    嵌套字典递归合并（用户未指定的子项保留默认值），
     非字典类型直接覆盖。文件不存在时返回默认配置。
 
     Args:
@@ -93,23 +110,10 @@ def load_config(config_file, default_config):
     if not os.path.isabs(config_file):
         config_file = os.path.join(SCRIPT_DIR, config_file)
 
-    if not os.path.exists(config_file):
-        base = os.path.splitext(config_file)[0]
-        for ext in ['.yaml', '.yml']:
-            alt = base + ext
-            if os.path.exists(alt):
-                config_file = alt
-                break
-
     try:
         with open(config_file, 'r', encoding='utf-8') as f:
             user_cfg = yaml.safe_load(f.read()) or {}
-        cfg = dict(default_config)
-        for k, v in user_cfg.items():
-            if isinstance(v, dict) and isinstance(cfg.get(k), dict):
-                cfg[k] = {**cfg[k], **v}
-            else:
-                cfg[k] = v
+        cfg = _deep_merge(dict(default_config), user_cfg)
         return cfg
     except (FileNotFoundError, yaml.YAMLError) as e:
         print(f"配置加载失败({e})，使用默认配置")
@@ -132,7 +136,7 @@ def load_cookies(cookie_file, script_dir=''):
         {cookie_name: cookie_value} 字典，文件不存在时返回空字典。
     """
     if not os.path.isabs(cookie_file):
-        cookie_file = os.path.join(script_dir, cookie_file)
+        cookie_file = os.path.join(script_dir, cookie_file) if script_dir else cookie_file
     if not os.path.exists(cookie_file):
         return {}
 
@@ -146,27 +150,30 @@ def load_cookies(cookie_file, script_dir=''):
 
     cookies = {}
     lines = content.splitlines()
-    is_netscape = any(line.count('\t') >= 6 and not line.startswith('#') for line in lines[:10])
+    is_netscape = any(line.count('	') >= 6 and not line.startswith('#') for line in lines[:10])
 
     if is_netscape:
         for line in lines:
             line = line.strip()
             if not line or line.startswith('#'):
                 continue
-            parts = line.split('\t')
+            parts = line.split('	')
             if len(parts) >= 7:
                 name, value = parts[5].strip(), parts[6].strip()
                 if name:
                     cookies[name] = value
     else:
-        content = content.replace('\n', ';').replace('\r', '')
-        for item in content.split(';'):
+        for item in content.splitlines():
             item = item.strip()
-            if not item or '=' not in item:
+            if not item:
                 continue
-            name, value = item.split('=', 1)
-            if name.strip():
-                cookies[name.strip()] = value.strip()
+            for part in item.split(';'):
+                part = part.strip()
+                if not part or '=' not in part:
+                    continue
+                name, value = part.split('=', 1)
+                if name.strip():
+                    cookies[name.strip()] = value.strip()
     return cookies
 
 
@@ -225,7 +232,7 @@ def update_room_name_in_config(room_id, anchor_name, rooms_file='rooms.txt'):
 
                 parts = content.split(',', 1)
                 if parts[0].strip() == room_id:
-                    indent = re.match(r'^(\s*)', line).group(1) if re.match(r'^(\s*)', line) else ''
+                    indent = (m.group(1) if (m := re.match(r'^(\s*)', line)) else '')
                     new_lines.append(f'{indent}{prefix}{room_id},{anchor_name}\n')
                     updated = True
                     found = True
@@ -239,9 +246,6 @@ def update_room_name_in_config(room_id, anchor_name, rooms_file='rooms.txt'):
                 updated = True
 
             if updated:
-                import tempfile
-                import shutil
-
                 fd, temp_path = tempfile.mkstemp(suffix='.txt', dir=os.path.dirname(rooms_file))
                 try:
                     with os.fdopen(fd, 'w', encoding='utf-8') as f:
@@ -261,6 +265,18 @@ def update_room_name_in_config(room_id, anchor_name, rooms_file='rooms.txt'):
 
 
 # ── 工具函数 ──────────────────────────────────────
+
+def sanitize_dir_name(name):
+    """清理目录名中的非法字符并去除首尾空格。
+
+    Args:
+        name: 原始名称。
+
+    Returns:
+        清理后的安全目录名。
+    """
+    return re.sub(r'[\/\\\:\*\？?\"\<\>\|\s]', '', name).strip()
+
 
 def generate_user_unique_id():
     """生成随机用户唯一 ID，用于 WebSocket 连接标识。
@@ -374,13 +390,42 @@ def get_user_id(user):
     return s if s else str(user.id)
 
 
-def sanitize_dir_name(name: str) -> str:
-    """清理目录名中的非法字符。"""
-    import re
-    return re.sub(r'[\\/\\\\\\:\\*\\？?\\\"\\<\\>\\|\\s]', '', name).strip()
-
-
 def get_anchor_dir(output_dir: str, anchor_name: str, live_id: str) -> str:
     """获取主播输出目录路径。"""
     dir_name = sanitize_dir_name(anchor_name) or live_id
     return os.path.join(output_dir, dir_name)
+
+
+# ── 默认配置 ──────────────────────────────────────
+# 与 config.yaml 做浅合并时的基准配置。
+# main.py 和 fetcher.py 共用此定义，保持一致。
+
+DEFAULT_CONFIG = {
+    'log_level': 'INFO',
+    'output_dir': 'data',
+    'live_stop': True,
+    'live_check_interval': 160,
+    'output': {
+        'chat': True, 'lucky_bag': True, 'gift': True, 'like': True,
+        'member': False, 'social': True, 'rank': False, 'stats': True,
+        'fansclub': False, 'emoji': False, 'room': False, 'roomstats': False,
+        'control': True,
+    },
+    'barrage': {
+        'gift_combo_final': True,
+        'csv': True, 'sqlite': False,
+    },
+    'record': {
+        'enabled': False,
+        'format': 'ts',
+        'quality': '原画',
+        'segment_time': 0,
+        'segment_size': 0,
+        'auto_convert': True,
+    },
+    'api': {
+        'enabled': False,
+        'host': '0.0.0.0',
+        'port': 8088,
+    },
+}

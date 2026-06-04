@@ -1,7 +1,9 @@
 """推流地址解析：从房间信息中选取指定画质的推流 URL。
 
-抖音 API 返回的 flv_pull_url 为 {质量键: URL} 字典，
-按 ORIGIN → UHD → HD → SD → LD 优先级排序。
+抖音 API 返回的 flv_pull_url 为 {质量键: URL} 字典。
+支持两种 API 格式:
+  - 旧版: ORIGIN → UHD → HD → SD → LD
+  - 新版: FULL_HD1 → HD1 → SD1 → SD2
 支持画质降级回退和推流地址连通性检测。
 """
 
@@ -11,8 +13,23 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-# API 返回的推流质量键，按画质从高到低排列
-_QUALITY_KEYS = ['ORIGIN', 'UHD', 'HD', 'SD', 'LD']
+# API 返回的推流质量键，按画质从高到低排列（兼容新旧两种 API 格式）
+_QUALITY_KEYS = [
+    'ORIGIN', 'FULL_HD1',     # 原画
+    'UHD',                     # 超清
+    'HD', 'HD1',               # 高清
+    'SD', 'SD2',               # 标清
+    'LD', 'SD1',               # 省流/流畅
+]
+
+# API key → 画质索引映射
+_KEY_TO_INDEX = {
+    'ORIGIN': 0, 'FULL_HD1': 0,
+    'UHD': 1,
+    'HD': 2, 'HD1': 2,
+    'SD': 3, 'SD2': 3,
+    'LD': 4, 'SD1': 4,
+}
 
 # 画质名称 → 索引映射（支持别名）
 _QUALITY_NAMES = {
@@ -39,40 +56,52 @@ def _check_url(url, timeout=10):
     """
     try:
         resp = requests.head(url, timeout=timeout, allow_redirects=True)
-        return resp.status_code < 500
+        return resp.status_code < 400
     except requests.RequestException:
         try:
             resp = requests.get(url, timeout=timeout, stream=True)
             resp.close()
-            return resp.status_code < 500
+            return resp.status_code < 400
         except requests.RequestException:
             return False
 
 
 def _build_ordered_list(raw_dict):
-    """将 API 返回的 {key: url} 字典按 _QUALITY_KEYS 排序为列表。
+    """将 API 返回的 {key: url} 字典按画质排序为列表。
+
+    使用 _KEY_TO_INDEX 将 API key 映射到画质索引 [0..4]，
+    未识别的 key 按字典顺序追加到末尾。
 
     Args:
         raw_dict: flv_pull_url 或 hls_pull_url_map 字典。
 
     Returns:
-        排序后的 URL 列表。
+        长度 5 的 URL 列表，索引 0=原画 4=省流。缺失画质用前一级填充。
     """
     if not raw_dict:
         return []
+    # 按画质索引排序
+    indexed = {}
+    for key, url in raw_dict.items():
+        idx = _KEY_TO_INDEX.get(key)
+        if idx is not None and idx not in indexed:
+            indexed[idx] = url
+    if not indexed:
+        # 全部未识别，按字典顺序取
+        for i, url in enumerate(raw_dict.values()):
+            if i < 5:
+                indexed[i] = url
+    # 构建 5 元素列表，缺失的用前一级填充
     values = []
-    for key in _QUALITY_KEYS:
-        url = raw_dict.get(key)
-        if url:
-            values.append(url)
-    if not values:
-        values = list(raw_dict.values())
-    while len(values) < 5 and values:
-        values.append(values[-1])
+    for i in range(5):
+        if i in indexed:
+            values.append(indexed[i])
+        elif values:
+            values.append(values[-1])
     return values
 
 
-def select_stream_url(room_info, quality_name='原画', check_health=True):
+def select_stream_url(room_info, quality_name='原画', check_health=True, quiet=False):
     """从房间信息中选取指定画质的推流 URL。
 
     按用户指定的画质选取推流地址，如果该画质的地址不可达，
@@ -159,8 +188,9 @@ def select_stream_url(room_info, quality_name='原画', check_health=True):
         logger.warning(f"[推流] 画质 {quality_name} 无可用地址")
         return result
 
-    actual_flv = flv_values[min(quality_index, len(flv_values) - 1)] if flv_values else ''
-    actual_hls = hls_values[min(quality_index, len(hls_values) - 1)] if hls_values else ''
+    actual_index = _QUALITY_NAMES.get(selected_label, quality_index)
+    actual_flv = flv_values[min(actual_index, len(flv_values) - 1)] if flv_values else ''
+    actual_hls = hls_values[min(actual_index, len(hls_values) - 1)] if hls_values else ''
 
     result.update({
         'is_live': True,
@@ -172,5 +202,6 @@ def select_stream_url(room_info, quality_name='原画', check_health=True):
 
     if selected_label != quality_name:
         logger.info(f"[推流] 画质降级: {quality_name} → {selected_label}")
-    logger.info(f"[推流] 选取画质 {selected_label}，地址: {record_url[:80]}...")
+    if not quiet:
+        logger.info(f"[推流] 选取画质 {selected_label}，地址: {record_url[:80]}...")
     return result

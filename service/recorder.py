@@ -28,7 +28,7 @@ def check_ffmpeg():
     try:
         subprocess.run(['ffmpeg', '-version'], capture_output=True, timeout=10)
         return True
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (FileNotFoundError, subprocess.TimeoutExpired, PermissionError):
         return False
 
 
@@ -47,22 +47,20 @@ class DouyinRecorder:
             返回 True = 仍在直播，False = 确认下播。
     """
 
-    record_dir = 'recordings'
-
     def __init__(self, live_id, anchor_name='', stream_url_provider=None,
-                 live_status_provider=None, output_dir='output'):
+                 live_status_provider=None, output_dir='data', session_dir=None):
         self.live_id = live_id
         self.anchor_name = anchor_name
         self._output_dir = output_dir
+        self._session_dir = session_dir or ''  # 外部传入的会话目录
         self._process = None
         self._record_url = ''
         self._record_cfg = {}
         self._save_path = ''
-        self._session_dir = ''
         self._stop_event = threading.Event()
         self._monitor_thread = None
+        self._recording_active = False  # 录制是否曾启动（stop()时仍需清理）
         self._start_time = 0.0
-        self._segment_index = 0
         self._stream_url_provider = stream_url_provider
         self._live_status_provider = live_status_provider
 
@@ -103,30 +101,24 @@ class DouyinRecorder:
         self._record_url = stream_url
         self._record_cfg = record_cfg
         self._stop_event.clear()
-        self._segment_index = 0
         if self._start_ffmpeg():
             self._start_monitor()
+            self._recording_active = True
 
     def _build_save_path(self):
-        """构建当前分段的保存路径。"""
+        """构建保存路径（基础路径，不含分段序号）。"""
         fmt = self._record_cfg.get('format', 'ts')
         now = datetime.now()
         ms = now.microsecond // 1000
-        if self._segment_index == 0:
+        if not self._session_dir:
             ts = now.strftime('%Y%m%d_%H%M')
             self._session_dir = os.path.join(
                 get_anchor_dir(self._output_dir, self.anchor_name, self.live_id), ts)
             os.makedirs(self._session_dir, exist_ok=True)
 
-        seg = self._segment_index
-        self._segment_index += 1
         dir_name = sanitize_dir_name(self.anchor_name) or self.live_id
-        use_segment = self._record_cfg.get('segment_time', 0) or self._record_cfg.get('segment_size', 0)
         ts_ms = now.strftime('%Y%m%d_%H%M') + f'_{ms:03d}'
-        if use_segment:
-            filename = f"{dir_name}_{ts_ms}_{seg:03d}.{fmt}"
-        else:
-            filename = f"{dir_name}_{ts_ms}.{fmt}"
+        filename = f"{dir_name}_{ts_ms}.{fmt}"
         return os.path.join(self._session_dir, filename)
 
     def _start_ffmpeg(self):
@@ -178,17 +170,17 @@ class DouyinRecorder:
 
         fmt = self._record_cfg.get('format', 'ts')
 
-        # 分段录制：仅 ts 和 mp4 支持 -f segment
-        use_segment = (segment_time > 0 or segment_size > 0) and fmt in ('ts', 'mp4')
+        # 分段录制：仅 ts 和 mp4 支持 -f segment，需要 segment_time > 0
+        use_segment = segment_time > 0 and fmt in ('ts', 'mp4')
 
-        # 非分段模式下才用 -fs 限制文件大小
-        if not use_segment and segment_size > 0:
+        # segment_size > 0 时用 -fs 限制文件大小（分段模式下限制每段，非分段限制总大小）
+        if segment_size > 0:
             cmd.extend(['-fs', f'{segment_size}M'])
 
         if use_segment:
             # 分段模式：输出用 segment muxer
-            pattern = os.path.join(self._session_dir,
-                                   f'{sanitize_dir_name(self.anchor_name) or self.live_id}_%03d.{fmt}')
+            base_no_ext = os.path.splitext(self._save_path)[0]
+            pattern = f'{base_no_ext}_%03d.{fmt}'
             cmd.extend(['-c:v', 'copy', '-c:a', 'copy'])
 
             seg_mux_args = [
@@ -197,8 +189,6 @@ class DouyinRecorder:
                 '-segment_format', fmt,
                 '-reset_timestamps', '1',
             ]
-            if segment_size > 0:
-                seg_mux_args.extend(['-segment_size', f'{segment_size}M'])
             cmd.extend(seg_mux_args)
             cmd.append(pattern)
         elif fmt == 'flv':
@@ -238,7 +228,7 @@ class DouyinRecorder:
 
     def stop(self):
         """停止录制并等待退出。"""
-        was_recording = self.is_recording
+        was_recording = self._recording_active
         self._stop_event.set()
 
         # 在清理前保存需要的配置
@@ -246,25 +236,27 @@ class DouyinRecorder:
 
         if was_recording:
             logger.info(f"[录制] {self.display_name} 正在停止...")
-            try:
-                if self._process.stdin:
-                    self._process.stdin.write(b'q\n')
-                    self._process.stdin.close()
-            except Exception:
+            # 尝试优雅停止 ffmpeg（如果进程还活着）
+            if self._process and self._process.poll() is None:
                 try:
-                    self._process.terminate()
+                    if self._process.stdin:
+                        self._process.stdin.write(b'q\n')
+                        self._process.stdin.close()
                 except Exception:
-                    pass
+                    try:
+                        self._process.terminate()
+                    except Exception:
+                        pass
 
-            try:
-                self._process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                logger.warning(f"[录制] ffmpeg 未响应，强制终止")
                 try:
-                    self._process.kill()
-                    self._process.wait(timeout=3)
-                except Exception:
-                    pass
+                    self._process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    logger.warning(f"[录制] ffmpeg 未响应，强制终止")
+                    try:
+                        self._process.kill()
+                        self._process.wait(timeout=3)
+                    except Exception:
+                        pass
 
             duration = time.time() - self._start_time if self._start_time > 0 else 0
             elapsed = time.strftime('%H:%M:%S', time.gmtime(duration))
@@ -274,10 +266,11 @@ class DouyinRecorder:
         self._process = None
         self._record_url = ''
         self._record_cfg = {}
+        self._recording_active = False
         if self._monitor_thread and self._monitor_thread.is_alive():
-            self._monitor_thread.join(timeout=3)
+            self._monitor_thread.join(timeout=15)
 
-        # 自动转码
+        # 自动转码（即使 ffmpeg 已异常退出，只要有录制曾启动就执行）
         if was_recording and auto_convert:
             self._convert_ts_to_mp4()
 
@@ -300,9 +293,11 @@ class DouyinRecorder:
                         break
 
                     # ── 下播二次确认 ──
-                    recheck_delay = 10
+                    recheck_delay = self._record_cfg.get('recheck_delay', 10)
                     if recheck_delay > 0 and return_code not in (0,):
                         confirmed = self._recheck_live_status(recheck_delay)
+                        if self._stop_event.is_set():
+                            break
                         if confirmed is False:
                             logger.info(f"[录制] {self.display_name} 二次确认已下播，停止录制")
                             self._stop_event.set()

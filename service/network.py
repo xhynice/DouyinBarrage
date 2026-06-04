@@ -16,6 +16,11 @@ import urllib.parse
 
 import requests
 
+
+class RoomNotFoundError(Exception):
+    """房间不存在或已注销（永久失败，不应重试）。"""
+    pass
+
 from base.utils import (
     generate_ms_token, APP_ID, LIVE_ID, VERSION_CODE,
     WEBCAST_SDK_VERSION, DID_RULE, DEVICE_PLATFORM,
@@ -25,6 +30,13 @@ logger = logging.getLogger(__name__)
 
 
 # ── HTTP 客户端 ──────────────────────────────────
+
+def _retry_wait(attempt):
+    """计算重试等待时间（指数退避 + 随机抖动）。"""
+    import random
+    wait = min(2 ** attempt, 10) + random.uniform(0, 1)
+    return wait
+
 
 def http_get_with_retry(session, url, max_retries=3, timeout=15, **kwargs):
     """带指数退避 + 超时自增的 HTTP GET 请求。
@@ -52,13 +64,13 @@ def http_get_with_retry(session, url, max_retries=3, timeout=15, **kwargs):
             return resp
         except requests.exceptions.ConnectionError as e:
             last_exc = e
-            wait = min(2 ** attempt + random.uniform(0, 1), 10)
+            wait = _retry_wait(attempt)
             logger.warning(f"[网络] 连接失败（尝试 {attempt+1}/{max_retries}）: {e}，{wait:.1f}s 后重试")
             time.sleep(wait)
         except requests.exceptions.Timeout as e:
             last_exc = e
             timeout = min(timeout * 1.5, 60)
-            wait = min(2 ** attempt + random.uniform(0, 1), 10)
+            wait = _retry_wait(attempt)
             logger.warning(f"[网络] 请求超时（尝试 {attempt+1}/{max_retries}），下次超时 {timeout:.0f}s，{wait:.1f}s 后重试")
             time.sleep(wait)
         except requests.RequestException as e:
@@ -107,7 +119,7 @@ def build_http_headers(ua, ua_version):
 
 # ── WebSocket 客户端 ──────────────────────────────
 
-def build_websocket_url(room_id, uid, ua_version):
+def build_websocket_url(room_id, uid, ua_version, cursor=None, internal_ext=None):
     """构建 WebSocket 长连接 URL，包含所有查询参数。
 
     cursor 格式为 't-{毫秒时间戳}_r-{随机数}_d-1_u-1_h-{随机数}'，
@@ -117,11 +129,23 @@ def build_websocket_url(room_id, uid, ua_version):
         room_id: 直播间真实 room_id。
         uid: 用户唯一 ID（18~19 位随机数字）。
         ua_version: 'Chrome/x.x.x.x' 格式的版本字符串。
+        cursor: 可选的 cursor 字符串（由 fetch_webcast_cursor 获取）。
+        internal_ext: 可选的 internal_ext 字符串（由 fetch_webcast_cursor 获取）。
 
     Returns:
         完整的 wss:// URL 字符串。
     """
     ts = int(time.time() * 1000)
+    if cursor is None:
+        cursor = f't-{ts}_r-{random.randint(10**18, 10**19 - 1)}_d-1_u-1_h-{random.randint(10**18, 10**19 - 1)}'
+    if internal_ext is None:
+        internal_ext = (
+            f'internal_src:dim|wss_push_room_id:{room_id}'
+            f'|wss_push_did:{uid}'
+            f'|first_req_ms:{ts}|fetch_time:{ts}'
+            f'|seq:1|wss_info:0-{ts}-0-0'
+            f'|wrds_v:{random.randint(10**18, 10**19 - 1)}'
+        )
     return (
         f"wss://webcast100-ws-web-hl.douyin.com/webcast/im/push/v2/"
         f"?app_name=douyin_web"
@@ -136,12 +160,8 @@ def build_websocket_url(room_id, uid, ua_version):
         f"&browser_name=Mozilla"
         f"&browser_version={urllib.parse.quote(ua_version, safe='')}"
         f"&browser_online=true&tz_name=Asia/Shanghai"
-        f"&cursor=t-{ts}_r-{random.randint(10**18, 10**19 - 1)}_d-1_u-1_h-{random.randint(10**18, 10**19 - 1)}"
-        f"&internal_ext=internal_src:dim|wss_push_room_id:{room_id}"
-        f"|wss_push_did:{uid}"
-        f"|first_req_ms:{ts}|fetch_time:{ts}"
-        f"|seq:1|wss_info:0-{ts}-0-0"
-        f"|wrds_v:{random.randint(10**18, 10**19 - 1)}"
+        f"&cursor={cursor}"
+        f"&internal_ext={internal_ext}"
         f"&host=https://live.douyin.com"
         f"&aid={APP_ID}&live_id={LIVE_ID}&did_rule={DID_RULE}"
         f"&endpoint=live_pc&support_wrds=1"
@@ -184,6 +204,100 @@ def build_ws_cookie(ttwid, login_cookies):
         if value:
             cookie_parts.append(f"{key}={value}")
     return "; ".join(cookie_parts)
+
+
+# ── 直播间地址解析 ────────────────────────────────
+
+_SUPPORTED_DOMAINS = (
+    'live.douyin.com', 'www.douyin.com', 'douyin.com',
+    'v.douyin.com',
+)
+
+
+def resolve_live_id(input_str, session, http_timeout=15):
+    """解析各种输入格式为统一的 web_rid（直播间短 ID）。
+
+    支持格式：
+        - 纯数字 web_rid: "536863152858"
+        - 完整直播间 URL: "https://live.douyin.com/536863152858"
+        - 抖音号 URL: "https://v.douyin.com/iQLgksj/"
+        - 用户主页 URL: "https://www.douyin.com/user/MS4wLjAB..."
+
+    Args:
+        input_str: 用户输入的直播间地址或 ID。
+        session: requests.Session 实例。
+        http_timeout: HTTP 请求超时秒数。
+
+    Returns:
+        解析后的 web_rid 字符串。
+
+    Raises:
+        ValueError: 无法解析时抛出。
+    """
+    input_str = input_str.strip()
+
+    # 纯数字 / 非 URL 格式 → 直接作为 web_rid
+    if not any(domain in input_str for domain in _SUPPORTED_DOMAINS):
+        return input_str
+
+    # 统一提取 host + path
+    from urllib.parse import urlparse
+    parsed = urlparse(input_str if '://' in input_str else f'https://{input_str}')
+    host = parsed.netloc or parsed.hostname or ''
+    path = parsed.path.rstrip('/')
+
+    # live.douyin.com/xxx → 直接取最后一段
+    if 'live.douyin.com' in host:
+        web_rid = path.rsplit('/', 1)[-1] if path else ''
+        if web_rid:
+            logger.info(f"[解析] 从直播间 URL 提取 web_rid: {web_rid}")
+            return web_rid
+        raise ValueError(f"无法从 URL 中提取 web_rid: {input_str}")
+
+    # 抖音短链 / 用户主页 → 跟随重定向后提取
+    logger.info(f"[解析] 正在解析短链: {input_str}")
+    ua = session.headers.get('User-Agent',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+        '(KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36')
+
+    try:
+        resp = session.get(input_str, timeout=http_timeout, allow_redirects=True,
+                           headers={'User-Agent': ua})
+        final_url = str(resp.url)
+        logger.info(f"[解析] 重定向至: {final_url}")
+    except Exception as e:
+        raise ValueError(f"短链访问失败: {e}")
+
+    # 从最终 URL 提取
+    final_parsed = urlparse(final_url)
+    final_path = final_parsed.path.rstrip('/')
+
+    # live.douyin.com/xxx 或 douyin.com/xxx
+    if '/live.douyin.com/' in final_url or final_parsed.hostname in ('live.douyin.com',):
+        web_rid = final_path.rsplit('/', 1)[-1]
+        if web_rid:
+            logger.info(f"[解析] 提取 web_rid: {web_rid}")
+            return web_rid
+
+    # /user/xxxx 或 /webcast/reflow/xxx
+    if '/user/' in final_path:
+        sec_uid = final_path.rsplit('/user/', 1)[-1].split('?')[0]
+        # 尝试从 reflow 参数中找 room_id
+        from urllib.parse import parse_qs
+        qs = parse_qs(final_parsed.query)
+        room_id = qs.get('room_id', [None])[0]
+        if room_id:
+            logger.info(f"[解析] 从用户主页提取 room_id: {room_id}")
+            return room_id
+        logger.info(f"[解析] 用户主页，sec_uid={sec_uid[:20]}...")
+
+    # 回退：取路径最后一段
+    web_rid = final_path.rsplit('/', 1)[-1] if final_path else ''
+    if web_rid and web_rid != 'user':
+        logger.info(f"[解析] 提取 web_rid: {web_rid}")
+        return web_rid
+
+    raise ValueError(f"无法解析直播间地址: {input_str}")
 
 
 # ── 房间 API ──────────────────────────────────────
@@ -370,22 +484,29 @@ def enter_room_api(ttwid, ua, ua_version, live_id, http_timeout=15, session=None
 
     try:
         resp_data = json.loads(resp_text)
-        logger.debug(f"[网络] API 返回 JSON 结构: status_code={resp_data.get('status_code', 'N/A')}, "
-                     f"data.data length={len(resp_data.get('data', {}).get('data', []))}")
     except (ValueError, json.JSONDecodeError):
         logger.error(f"[网络] API 响应非 JSON，前 200 字符: {resp_text[:200]}")
         raise ValueError(f'API 响应非 JSON (status_code={resp.status_code})')
 
-    room_list = resp_data.get('data', {}).get('data', [])
+    data_block = resp_data.get('data')
+    if not isinstance(data_block, dict):
+        raise RoomNotFoundError(f'API 返回异常 (status_code={resp_data.get("status_code", "N/A")}, data类型={type(data_block).__name__})')
+
+    logger.debug(f"[网络] API 返回 JSON 结构: status_code={resp_data.get('status_code', 'N/A')}, "
+                 f"data.data length={len(data_block.get('data', []))}")
+
+    room_list = data_block.get('data', [])
     if not room_list:
-        raise ValueError(f'API 未返回房间数据 (status_code={resp_data.get("status_code", "N/A")})')
+        raise RoomNotFoundError(f'房间不存在或未开播 (status_code={resp_data.get("status_code", "N/A")})')
 
     room = room_list[0]
     room_id = str(room.get('room_id_str', '') or room.get('room_id', '') or
                    room.get('id_str', '') or room.get('id', ''))
     status = room.get('status', 0)
     
-    user = resp_data.get('data', {}).get('user', {})
+    user = data_block.get('user', {})
+    if not isinstance(user, dict):
+        user = {}
     anchor_name = user.get('nickname', '')
     sec_uid = user.get('sec_uid', '')
     
@@ -396,6 +517,8 @@ def enter_room_api(ttwid, ua, ua_version, live_id, http_timeout=15, session=None
     
     cover_list = room.get('cover', {}).get('url_list', [])
     room_cover = cover_list[0] if cover_list else ''
+
+    stream_url = room.get('stream_url', {})
 
     if not room_id:
         raise ValueError('API 返回的 room_id 为空')
@@ -408,4 +531,200 @@ def enter_room_api(ttwid, ua, ua_version, live_id, http_timeout=15, session=None
         'room_title': room_title,
         'room_cover': room_cover,
         'sec_uid': sec_uid,
+        'stream_url': stream_url,
     }
+
+
+# ── 备用 API ──────────────────────────────────────
+
+def scrape_room_info(session, live_id, http_timeout=15):
+    """备用 API：从 live.douyin.com/{liveid} 页面 HTML 解析房间信息。
+
+    当 room/web/enter API 失败时作为降级方案。
+    解析 SSR 嵌入的 roomStore JSON 或轻量正则提取 status/roomid/nickname。
+
+    Args:
+        session: requests.Session 实例。
+        live_id: 直播间 ID（web_rid）。
+        http_timeout: HTTP 请求超时秒数。
+
+    Returns:
+        dict 包含 room_id, status, anchor_name，格式与 enter_room_api 一致。
+        解析失败时返回空字典。
+    """
+    try:
+        url = f'https://live.douyin.com/{live_id}'
+        resp = http_get_with_retry(session, url, timeout=http_timeout)
+        html = resp.text
+
+        result = {}
+
+        # 优先尝试从 SSR JSON 块中精确提取（避免正则误匹配其他 JSON 字段）
+        json_match = re.search(r'<script\s+id="RENDER_DATA"[^>]*>(.*?)</script>', html, re.DOTALL)
+        if json_match:
+            try:
+                import json as _json
+                from urllib.parse import unquote
+                render_data = _json.loads(unquote(json_match.group(1)))
+                # 递归查找 roomStore 或 roomInfo
+                room = _find_room_in_dict(render_data)
+                if room:
+                    result['room_id'] = str(room.get('id_str', room.get('id', '')))
+                    result['status'] = int(room.get('status', 0))
+                    user = room.get('owner', {})
+                    result['anchor_name'] = user.get('nickname', '')
+                    result['room_title'] = room.get('title', '')
+                    result['sec_uid'] = user.get('sec_uid', '')
+            except Exception:
+                pass  # JSON 解析失败，回退到正则
+
+        # 正则回退（仅当 JSON 提取未得到完整结果时）
+        if not result.get('room_id'):
+            m = re.search(r'"room_id"\s*:\s*"(\d+)"', html)
+            if m:
+                result['room_id'] = m.group(1)
+        if not result.get('status'):
+            m = re.search(r'"status"\s*:\s*(\d+)', html)
+            if m:
+                result['status'] = int(m.group(1))
+        if not result.get('anchor_name'):
+            m = re.search(r'"nickname"\s*:\s*"([^"]+)"', html)
+            if m:
+                result['anchor_name'] = m.group(1)
+        if not result.get('room_title'):
+            m = re.search(r'"title"\s*:\s*"([^"]*)"', html)
+            if m:
+                result['room_title'] = m.group(1)
+        if not result.get('sec_uid'):
+            m = re.search(r'"sec_uid"\s*:\s*"([^"]*)"', html)
+            if m:
+                result['sec_uid'] = m.group(1)
+
+        if result.get('room_id') and result.get('status'):
+            result.setdefault('anchor_avatar', '')
+            result.setdefault('room_cover', '')
+            result.setdefault('stream_url', {})
+            return result
+        return {}
+    except Exception as e:
+        logger.debug(f"[网络] scrape_room_info 失败: {e}")
+        return {}
+
+
+def _find_room_in_dict(d, depth=0):
+    """在嵌套字典中递归查找包含 'id_str' 和 'status' 的房间对象。"""
+    if depth > 8:
+        return None
+    if isinstance(d, dict):
+        if 'id_str' in d and 'status' in d:
+            return d
+        for v in d.values():
+            found = _find_room_in_dict(v, depth + 1)
+            if found:
+                return found
+    elif isinstance(d, list):
+        for item in d:
+            found = _find_room_in_dict(item, depth + 1)
+            if found:
+                return found
+    return None
+
+
+def fetch_webcast_cursor(session, room_id, uid, ttwid, ua, login_cookies=None, http_timeout=15):
+    """预请求 /webcast/im/fetch/ 获取服务端 cursor 和 internalExt。
+
+    按照 DouYin_Spider 的 get_webcast_detail 实现，使用完整参数集。
+    响应为 protobuf 格式的 Response 消息。
+
+    Args:
+        session: requests.Session 实例。
+        room_id: 直播间真实 room_id。
+        uid: 用户唯一 ID。
+        ttwid: ttwid Cookie 值。
+        ua: User-Agent 字符串。
+        login_cookies: 登录 Cookie 字典（可选，用于 CSRF token）。
+        http_timeout: HTTP 请求超时秒数。
+
+    Returns:
+        (cursor, internal_ext) 元组，失败时返回 (None, None)。
+    """
+    from base.messages import Response as ResponseProto
+    from base.parser import parse_proto
+    try:
+        params = {
+            'resp_content_type': 'protobuf',
+            'did_rule': '3',
+            'device_id': '',
+            'app_name': 'douyin_web',
+            'endpoint': 'live_pc',
+            'support_wrds': '1',
+            'user_unique_id': str(uid),
+            'identity': 'audience',
+            'need_persist_msg_count': '15',
+            'insert_task_id': '',
+            'live_reason': '',
+            'room_id': room_id,
+            'version_code': VERSION_CODE,
+            'last_rtt': '0',
+            'live_id': LIVE_ID,
+            'aid': APP_ID,
+            'fetch_rule': '1',
+            'cursor': '',
+            'internal_ext': '',
+            'device_platform': DEVICE_PLATFORM,
+            'cookie_enabled': 'true',
+            'screen_width': '1920',
+            'screen_height': '1080',
+            'browser_language': 'zh-CN',
+            'browser_platform': 'Win32',
+            'browser_name': 'Mozilla',
+            'browser_version': ua.split('Mozilla/')[-1] if 'Mozilla' in ua else ua,
+            'browser_online': 'true',
+            'tz_name': 'Asia/Shanghai',
+        }
+        url = f'https://live.douyin.com/webcast/im/fetch/'
+
+        cookies = {'ttwid': ttwid}
+        if login_cookies:
+            for k in ('sessionid', 'passport_csrf_token', 'msToken'):
+                if k in login_cookies:
+                    cookies[k] = login_cookies[k]
+
+        headers = {
+            'User-Agent': ua,
+            'Referer': f'https://live.douyin.com/',
+            'Origin': 'https://live.douyin.com',
+        }
+
+        resp = session.get(url, params=params, cookies=cookies,
+                           headers=headers, timeout=http_timeout)
+        resp.raise_for_status()
+
+        # 优先尝试 protobuf 解析
+        if resp.content and len(resp.content) > 5:
+            try:
+                msg = parse_proto(ResponseProto, resp.content)
+                cursor = msg.cursor if msg.cursor else None
+                internal_ext = msg.internal_ext if msg.internal_ext else None
+                if cursor or internal_ext:
+                    logger.debug(f"[网络] fetch_webcast_cursor 成功: cursor={str(cursor)[:50]}...")
+                    return cursor, internal_ext
+            except Exception:
+                pass
+
+        # 回退：尝试 JSON 解析
+        try:
+            data = resp.json()
+            cursor = data.get('cursor', '')
+            internal_ext = data.get('internal_ext', '')
+            if cursor or internal_ext:
+                logger.debug(f"[网络] fetch_webcast_cursor 成功(JSON): cursor={str(cursor)[:50]}...")
+                return cursor, internal_ext
+        except Exception:
+            pass
+
+        logger.debug("[网络] fetch_webcast_cursor 响应中无 cursor/internalExt")
+        return None, None
+    except Exception as e:
+        logger.debug(f"[网络] fetch_webcast_cursor 失败: {e}")
+        return None, None

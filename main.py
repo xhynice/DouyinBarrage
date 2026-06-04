@@ -28,29 +28,83 @@ if __package__ is None:
         sys.path.insert(0, _script_dir)
 
 from service.fetcher import DouyinBarrage
-from base.utils import update_room_name_in_config
-from base.output import RoomLogFilter
+from base.utils import update_room_name_in_config, load_config, DEFAULT_CONFIG
+from base.output import RoomLogFilter, get_room_statuses
+from service.recorder import check_ffmpeg
 
 _shutting_down = False
 _active_rooms = {}  # {room_id: {'instance': DouyinBarrage, 'thread': Thread, 'config': dict}}
 _active_rooms_lock = threading.Lock()
+_rooms_file_lock = threading.Lock()  # 保护 rooms.txt 读写
 
 logger = logging.getLogger(__name__)
 
+# ── 全局显示配置 ──
+_display_config = {
+    'log_level': 'INFO',
+    'record_enabled': False,
+    'record_quality': '原画',
+    'record_format': 'ts',
+    'barrage_cfg': {'csv': True, 'sqlite': False},
+}
+
+
+def status_line():
+    """构建单行状态，供 display_loop 周期性输出。"""
+    statuses = get_room_statuses()
+    if not statuses:
+        return ''
+    with _active_rooms_lock:
+        active_count = len(_active_rooms)
+    now_str = time.strftime('%H:%M:%S')
+    rec_enabled = _display_config.get('record_enabled', False)
+    rec_quality = _display_config.get('record_quality', '原画')
+    rec_fmt = _display_config.get('record_format', 'ts')
+
+    # 弹幕保存格式
+    barrage_cfg = _display_config.get('barrage_cfg', {})
+    fmts = []
+    if barrage_cfg.get('csv', True):
+        fmts.append('csv')
+    if barrage_cfg.get('sqlite', False):
+        fmts.append('sqlite')
+    barrage_fmt = ','.join(fmts) if fmts else '无'
+
+    parts = [f"共监测{active_count}个直播中"]
+    if rec_enabled:
+        parts.append(f"录制: [{rec_quality}] {rec_fmt}")
+    parts.append(f"弹幕: {barrage_fmt}")
+    parts.append(f"当前时间: {now_str}")
+
+    for live_id, info in statuses.items():
+        if info.get('status') == 'waiting':
+            anchor = info.get('anchor', live_id)
+            interval = info.get('interval', '?')
+            parts.append(f"{anchor} [监测中] ({interval}s)")
+        elif info.get('status') == 'collecting':
+            anchor = info.get('anchor', live_id)
+            count = info.get('msg_count', 0)
+            elapsed = info.get('elapsed', 0)
+            rate = count / elapsed if elapsed > 0 else 0
+            s = f"{anchor} [弹幕] {count}条 ({rate:.1f}/s)"
+            rec_elapsed = info.get('rec_elapsed', 0)
+            if rec_elapsed > 0:
+                m, sec = divmod(int(rec_elapsed), 60)
+                h, m = divmod(m, 60)
+                dur = f"{h:02d}:{m:02d}:{sec:02d}" if h > 0 else f"{m:02d}:{sec:02d}"
+                s += f" [录制] {dur}"
+            parts.append(s)
+
+    return " | ".join(parts)
+
 
 def signal_handler(signum, frame):
-    """信号处理函数，优雅退出"""
+    """信号处理函数，仅设退出标志，清理由主循环处理（避免在信号上下文中获取锁）。"""
     global _shutting_down
     if _shutting_down:
         return
     _shutting_down = True
     print("\n【收到停止信号，正在优雅退出...】")
-    with _active_rooms_lock:
-        for entry in list(_active_rooms.values()):
-            try:
-                entry['instance'].stop()
-            except Exception:
-                pass
 
 
 def show_usage():
@@ -63,6 +117,7 @@ def show_usage():
   --log-level <级别>        覆盖日志级别 (DEBUG/INFO/WARNING/ERROR/NONE)
   --live-stop               直播结束后停止退出
   --live-wait               直播结束后等待重开播
+  --record                 启用直播流录制
   --all                     采集 rooms.txt 中全部未注释的房间
 """)
 
@@ -134,15 +189,17 @@ def _make_on_room_info(room_cfg):
     return on_room_info
 
 
-def run_room(room_cfg, log_level, live_stop):
+def run_room(room_cfg, log_level, live_stop, record=None):
     """单个房间的采集线程。
 
     Args:
         room_cfg: {'id': str, 'name': str} 配置。
         log_level: 日志级别。
         live_stop: 直播结束后是否停止退出 (bool)。
+        record: 是否启用录制 (bool)。
     """
     live_id = room_cfg['id']
+    instance = None
 
     try:
         instance = DouyinBarrage(live_id, log_level=log_level, on_room_info=_make_on_room_info(room_cfg))
@@ -151,21 +208,57 @@ def run_room(room_cfg, log_level, live_stop):
 
         if live_stop is not None:
             instance.config['live_stop'] = live_stop
+        if record is not None:
+            instance.config.setdefault('record', {})['enabled'] = record
 
         instance.start()
+
+        # 检查是否因房间不存在而退出，自动注释 rooms.txt
+        if instance.stop_reason == 'room_not_found':
+            _comment_room_in_rooms_file(live_id)
+
     except Exception as e:
         logger.error(f"[{live_id}] 采集异常: {e}")
     finally:
+        if instance:
+            try:
+                instance.stop()
+            except Exception:
+                pass
         with _active_rooms_lock:
             _active_rooms.pop(live_id, None)
 
 
+def _comment_room_in_rooms_file(room_id, rooms_file=None):
+    """在 rooms.txt 中注释掉指定房间，防止热加载重复启动。"""
+    if rooms_file is None:
+        rooms_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rooms.txt')
+    with _rooms_file_lock:
+        try:
+            with open(rooms_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            changed = False
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if stripped and not stripped.startswith('#'):
+                    # 匹配行首的 room_id（可能带主播名，如 "12345,主播名"）
+                    rid = stripped.split(',')[0].strip()
+                    if rid == room_id:
+                        lines[i] = '# ' + line
+                        changed = True
+            if changed:
+                with open(rooms_file, 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+                logger.info(f"[热加载] 已自动注释无效房间 {room_id}（写入 rooms.txt）")
+        except Exception as e:
+            logger.error(f"[热加载] 注释房间 {room_id} 失败: {e}")
 
-def _start_room(room_cfg, log_level, live_stop):
+
+def _start_room(room_cfg, log_level, live_stop, record=None):
     """启动单个房间线程（热加载用）。"""
     t = threading.Thread(
         target=run_room,
-        args=(room_cfg, log_level, live_stop),
+        args=(room_cfg, log_level, live_stop, record),
         name=f"room-{room_cfg['id']}",
         daemon=False,
     )
@@ -176,10 +269,11 @@ def _start_room(room_cfg, log_level, live_stop):
 class RoomsWatcher:
     """监控 rooms.txt 变化，自动增删房间（热加载）。"""
 
-    def __init__(self, rooms_file, log_level, live_stop, check_interval=10):
+    def __init__(self, rooms_file, log_level, live_stop, record=None, check_interval=10):
         self._rooms_file = rooms_file
         self._log_level = log_level
         self._live_stop = live_stop
+        self._record = record
         self._interval = check_interval
         self._last_mtime = self._get_mtime()
         self._stop_event = threading.Event()
@@ -215,24 +309,23 @@ class RoomsWatcher:
 
         with _active_rooms_lock:
             current_ids = set(_active_rooms.keys())
-
-        to_remove = current_ids - new_ids
-        to_add = new_ids - current_ids
+            to_remove = current_ids - new_ids
+            to_add = new_ids - current_ids
+            # 提前获取要移除的房间条目，避免再次获取锁
+            entries = [(rid, _active_rooms.get(rid)) for rid in to_remove]
 
         if not to_remove and not to_add:
-            logger.info("[热加载] rooms.txt 变化但房间列表无变化")
+            logger.debug("[热加载] rooms.txt 变化但房间列表无变化")
             return
 
         if to_remove:
             logger.info(f"[热加载] 移除房间: {to_remove}")
-            with _active_rooms_lock:
-                for rid in to_remove:
-                    entry = _active_rooms.get(rid)
-                    if entry:
-                        try:
-                            entry['instance'].stop()
-                        except Exception as e:
-                            logger.error(f"[热加载] 停止 {rid} 异常: {e}")
+            for rid, entry in entries:
+                if entry:
+                    try:
+                        entry['instance'].stop()
+                    except Exception as e:
+                        logger.error(f"[热加载] 停止 {rid} 异常: {e}")
 
         if to_add:
             new_room_list = [r for r in new_rooms if r['id'] in to_add]
@@ -240,7 +333,7 @@ class RoomsWatcher:
             for r in new_room_list:
                 if r.get('name'):
                     RoomLogFilter.update_anchor(r['id'], r['name'])
-                _start_room(r, self._log_level, self._live_stop)
+                _start_room(r, self._log_level, self._live_stop, record=self._record)
                 time.sleep(3.5)  # 错开启动
 
         logger.info(f"[热加载] 完成，当前 {len(new_ids)} 个房间")
@@ -347,15 +440,16 @@ def parse_user_input(user_input, rooms):
     parts = [p.strip() for p in raw_parts if p.strip()]
 
     selected_rooms = []
-    seen = set()
+    seen_idxs = set()   # 跟踪已选的房间列表索引
+    seen_ids = set()    # 跟踪已选的直播间 ID
 
     for part in parts:
         # 尝试解析范围 1-3
         range_idxs = _parse_range(part, len(rooms))
         if range_idxs:
             for idx in range_idxs:
-                if idx not in seen:
-                    seen.add(idx)
+                if idx not in seen_idxs:
+                    seen_idxs.add(idx)
                     selected_rooms.append(rooms[idx])
             continue
 
@@ -363,16 +457,16 @@ def parse_user_input(user_input, rooms):
         try:
             idx = int(part) - 1
             if 0 <= idx < len(rooms):
-                if idx not in seen:
-                    seen.add(idx)
+                if idx not in seen_idxs:
+                    seen_idxs.add(idx)
                     selected_rooms.append(rooms[idx])
             else:
                 warnings.append(f"编号 {part} 超出范围（1-{len(rooms)}），已跳过")
         except ValueError:
             # 尝试作为直播间ID解析
             if part.isdigit():
-                if part not in seen:
-                    seen.add(part)
+                if part not in seen_ids:
+                    seen_ids.add(part)
                     selected_rooms.append({'id': part, 'name': ''})
             else:
                 warnings.append(f"'{part}' 不是有效的编号或直播间ID，已跳过")
@@ -383,13 +477,14 @@ def parse_user_input(user_input, rooms):
     return None, None, warnings
 
 
-def main_multi(room_list, log_level, live_stop):
+def main_multi(room_list, log_level, live_stop, record=None):
     """多房间模式入口（支持热加载 rooms.txt）。
 
     Args:
         room_list: 房间配置列表 [{'id': str, 'name': str}, ...]
         log_level: 日志级别
         live_stop: 直播结束后是否停止退出 (bool)。
+        record: 是否启用录制 (bool)。
     """
     global _shutting_down
     if not room_list:
@@ -413,44 +508,74 @@ def main_multi(room_list, log_level, live_stop):
         print(f"日志级别: {log_level}")
     if live_stop is not None:
         print(f"直播结束行为: {'结束退出' if live_stop else '等待重开播'}")
+    # 更新全局显示配置
+    cfg = load_config('config.yaml', DEFAULT_CONFIG)
+    rc = cfg.get('record', {})
+    _display_config['record_enabled'] = rc.get('enabled', False) if record is None else record
+    if _display_config['record_enabled']:
+        print("录制: 已启用")
     print("按 Ctrl+C 停止所有采集")
     print("热加载: 修改 rooms.txt 自动增删房间\n")
+    _display_config['record_quality'] = rc.get('quality', '原画')
+    _display_config['record_format'] = rc.get('format', 'ts')
+    _display_config['barrage_cfg'] = cfg.get('barrage', {'csv': True, 'sqlite': False})
+    if log_level:
+        _display_config['log_level'] = log_level
 
     # 逐个启动，错开签名调用
     for i, room_cfg in enumerate(room_list):
         if room_cfg.get('name'):
             RoomLogFilter.update_anchor(room_cfg['id'], room_cfg['name'])
-        _start_room(room_cfg, log_level, live_stop)
+        _start_room(room_cfg, log_level, live_stop, record=record)
         if i < len(room_list) - 1:
             time.sleep(3.5)
 
+    # 周期性状态行（房间启动后再开始，确保日志已刷出）
+    def _periodic_status():
+        while not _shutting_down:
+            time.sleep(5)
+            line = status_line()
+            if line:
+                print(f"\n{line}")
+    threading.Thread(target=_periodic_status, daemon=True).start()
+
     # 启动文件监控
     rooms_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rooms.txt')
-    watcher = RoomsWatcher(rooms_file, log_level, live_stop)
+    watcher = RoomsWatcher(rooms_file, log_level, live_stop, record=record)
     watcher.start()
+
+    # 启动 API 服务器（如果启用）
+    api_cfg = cfg.get('api', {})
+    if api_cfg.get('enabled', False):
+        from service.api import start_api_server
+        start_api_server(
+            api_cfg.get('host', '0.0.0.0'),
+            api_cfg.get('port', 8088),
+            _active_rooms,
+            _active_rooms_lock,
+            load_rooms_from_config,
+        )
 
     print(f"\n[主控] {len(room_list)} 个采集线程已启动\n")
 
-    # 等待：直到所有房间线程退出或用户中断
-    try:
-        while not _shutting_down:
-            time.sleep(1)
-            with _active_rooms_lock:
-                if not _active_rooms:
-                    break
-    except KeyboardInterrupt:
-        print("\n【用户中断，停止所有采集】")
-        _shutting_down = True
-        watcher.stop()
+    # 等待直到所有房间线程退出或收到停止信号
+    while not _shutting_down:
+        time.sleep(1)
         with _active_rooms_lock:
-            for entry in list(_active_rooms.values()):
-                try:
-                    entry['instance'].stop()
-                except Exception:
-                    pass
-        time.sleep(2)
+            if not _active_rooms and not _shutting_down:
+                break
 
+    # 统一清理（signal_handler 只设标志，实际操作在此处执行）
+    print("\n【停止所有采集】")
     watcher.stop()
+    with _active_rooms_lock:
+        entries = list(_active_rooms.values())
+    for entry in entries:
+        try:
+            entry['instance'].stop()
+        except Exception:
+            pass
+    time.sleep(2)
     print("[主控] 所有采集已停止")
 
 
@@ -468,6 +593,8 @@ def main():
                         help='直播结束后停止退出（默认跟随配置文件）')
     parser.add_argument('--live-wait', action='store_true',
                         help='直播结束后等待重开播（默认跟随配置文件）')
+    parser.add_argument('--record', action='store_true',
+                        help='启用直播流录制（覆盖配置文件中的 record.enabled）')
     parser.add_argument('--all', action='store_true',
                         help='采集 rooms.txt 中全部未注释的房间（跳过交互选择）')
 
@@ -478,6 +605,14 @@ def main():
         print("错误：--live-stop 和 --live-wait 不能同时使用")
         sys.exit(1)
     live_stop = True if args.live_stop else (False if args.live_wait else None)
+
+    record = True if args.record else None
+
+    # 检查 ffmpeg（启用录制时）
+    if record:
+        if not check_ffmpeg():
+            print("错误：启用录制但未找到 ffmpeg，请先安装 FFmpeg")
+            sys.exit(1)
 
     # 切换到脚本所在目录（配置文件、cookie.txt 相对于此目录）
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -495,7 +630,7 @@ def main():
         for r in rooms:
             if r.get('name'):
                 RoomLogFilter.update_anchor(r['id'], r['name'])
-        main_multi(rooms, args.log_level, live_stop)
+        main_multi(rooms, args.log_level, live_stop, record=record)
         return
 
     # 命令行直接指定了ID，走统一的多房间入口（单房间也热加载）
@@ -504,7 +639,7 @@ def main():
         room_cfg = next((r for r in rooms if r['id'] == args.live_id), {'id': args.live_id, 'name': ''})
         if room_cfg.get('name'):
             RoomLogFilter.update_anchor(room_cfg['id'], room_cfg['name'])
-        main_multi([room_cfg], args.log_level, live_stop)
+        main_multi([room_cfg], args.log_level, live_stop, record=record)
     else:
         # 交互式选择
         rooms = load_rooms_from_config()
@@ -527,7 +662,7 @@ def main():
                     print("直播间 ID 不能为空")
                     continue
                 break
-            main_multi([{'id': live_id, 'name': ''}], args.log_level, live_stop)
+            main_multi([{'id': live_id, 'name': ''}], args.log_level, live_stop, record=record)
             return
 
         def show_room_list():
@@ -578,13 +713,13 @@ def main():
                 room_cfg = next((r for r in rooms if r['id'] == data), {'id': data, 'name': ''})
                 if room_cfg.get('name'):
                     RoomLogFilter.update_anchor(room_cfg['id'], room_cfg['name'])
-                main_multi([room_cfg], args.log_level, live_stop)
+                main_multi([room_cfg], args.log_level, live_stop, record=record)
                 break
             elif mode == 'multi':
                 for r in data:
                     if r.get('name'):
                         RoomLogFilter.update_anchor(r['id'], r['name'])
-                main_multi(data, args.log_level, live_stop)
+                main_multi(data, args.log_level, live_stop, record=record)
                 break
             else:
                 # mode is None (空输入或全部无效)
