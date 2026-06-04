@@ -11,7 +11,6 @@
 ```bash
 # 安装
 pip install -r requirements.txt
-npm install crypto-js
 
 # 配置 Cookie（可选，获取完整礼物等数据）
 cp cookie.example.txt cookie.txt
