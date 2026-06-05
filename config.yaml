@@ -25,7 +25,6 @@ output:
 
 # ==================== 弹幕输出 ====================
 barrage:
-  gift_combo_final: true      # 礼物连击过滤: true=只记最终值(×520) / false=记录每次递增
   csv: true                   # CSV 输出（UTF-8 BOM，Excel 直接打开）
   sqlite: false               # SQLite 输出（WAL 模式，跨会话追加）
 

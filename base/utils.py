@@ -412,7 +412,6 @@ DEFAULT_CONFIG = {
         'control': True,
     },
     'barrage': {
-        'gift_combo_final': True,
         'csv': True, 'sqlite': False,
     },
     'record': {

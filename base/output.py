@@ -553,10 +553,9 @@ class DataRecorder:
             except Exception as e:
                 consecutive_errors += 1
                 if consecutive_errors >= 5:
-                    self._opened = False
-                    logger.error(f"[数据] 刷新线程连续 {consecutive_errors} 次异常，停止记录: {e}")
-                    break
-                logger.warning(f"[数据] 刷新异常 ({consecutive_errors}/5)，重试: {e}")
+                    logger.error(f"[数据] 刷新线程连续 {consecutive_errors} 次异常，继续尝试: {e}")
+                else:
+                    logger.warning(f"[数据] 刷新异常 ({consecutive_errors}/5)，重试: {e}")
                 time.sleep(2)
         # 最终刷新
         try:
@@ -619,7 +618,8 @@ class DataRecorder:
         if self._flush_thread and self._flush_thread.is_alive():
             self._flush_thread.join(timeout=5)
             if self._flush_thread.is_alive():
-                logger.warning("[数据] 刷新线程未在 5 秒内退出，跳过最终刷新")
+                pending = sum(len(b) for b in self._sqlite_bufs.values()) + sum(len(b) for b in self._csv_bufs.values())
+                logger.warning(f"[数据] 刷新线程未在 5 秒内退出，{pending} 条数据可能未写入")
         for fp in self._csv_fps.values():
             try:
                 fp.close()
@@ -627,6 +627,7 @@ class DataRecorder:
                 pass
         if self._db is not None:
             try:
+                self._db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
                 self._db.close()
             except Exception:
                 pass

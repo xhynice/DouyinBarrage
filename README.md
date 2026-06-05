@@ -56,7 +56,6 @@ output:                       # 消息类型开关
   # member / rank / fansclub / emoji / room / roomstats: false
 
 barrage:
-  gift_combo_final: true      # 礼物连击只记最终值
   csv: true                   # CSV 输出
   sqlite: false               # SQLite 输出
 

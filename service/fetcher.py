@@ -873,7 +873,8 @@ class DouyinBarrage:
                             PushFrame(payload_type="hb")._pb.SerializeToString(),
                             websocket.ABNF.OPCODE_BINARY,
                         )
-            except Exception:
+            except Exception as e:
+                logger.warning(f"[心跳] 心跳线程异常退出: {e}")
                 break
             conn_stop.wait(timeout=interval + random.uniform(0, 2))
 
@@ -1028,7 +1029,6 @@ class DouyinBarrage:
 
         # 预计算 parser 配置（消息开关 + 格式/行为配置，每连接刷新一次）
         self._eo_cached = dict(self._enable_outputs)
-        self._eo_cached['gift_combo_final'] = self._barrage_cfg.get('gift_combo_final', False)
         self._eo_cached['live_stop'] = self.config.get('live_stop', False)
 
         # 停止旧连接的线程，重建连接级停止信号
