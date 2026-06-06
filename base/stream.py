@@ -5,6 +5,13 @@
   - 旧版: ORIGIN → UHD → HD → SD → LD
   - 新版: FULL_HD1 → HD1 → SD1 → SD2
 支持画质降级回退和推流地址连通性检测。
+
+画质名称与抖音官方 (live_core_sdk_data.pull_data.options.qualities) 一致:
+  - 原画 (level 5, sdk_key=origin)        → 最高
+  - 蓝光 (level 4, sdk_key=uhd)
+  - 超清 (level 3, sdk_key=hd)
+  - 高清 (level 2, sdk_key=sd)
+  - 标清 (level 1, sdk_key=ld)            → 最低
 """
 
 import logging
@@ -15,11 +22,11 @@ logger = logging.getLogger(__name__)
 
 # API 返回的推流质量键，按画质从高到低排列（兼容新旧两种 API 格式）
 _QUALITY_KEYS = [
-    'ORIGIN', 'FULL_HD1',     # 原画
-    'UHD',                     # 超清
-    'HD', 'HD1',               # 高清
-    'SD', 'SD2',               # 标清
-    'LD', 'SD1',               # 省流/流畅
+    'ORIGIN', 'FULL_HD1',     # 原画 / 蓝光
+    'UHD',                     # 蓝光
+    'HD', 'HD1',               # 超清
+    'SD', 'SD2',               # 高清
+    'LD', 'SD1',               # 标清
 ]
 
 # API key → 画质索引映射
@@ -31,17 +38,17 @@ _KEY_TO_INDEX = {
     'LD': 4, 'SD1': 4,
 }
 
-# 画质名称 → 索引映射（支持别名）
+# 画质名称 → 索引映射（与抖音官方名一致，支持 sdk_key 别名）
 _QUALITY_NAMES = {
-    '原画': 0, 'origin': 0, '4k': 0,
-    '超清': 1, 'uhd': 1,
-    '高清': 2, 'hd': 2, 'high': 2,
-    '标清': 3, 'sd': 3, 'medium': 3,
-    '省流': 4, 'ld': 4, 'low': 4,
+    '原画': 0, 'origin': 0,
+    '蓝光': 1, 'uhd': 1, 'blue': 1,
+    '超清': 2, 'hd': 2,
+    '高清': 3, 'sd': 3,
+    '标清': 4, 'ld': 4,
 }
 
-# 画质索引 → 中文名（用于回退时输出）
-_QUALITY_LABELS = ['原画', '超清', '高清', '标清', '省流']
+# 画质索引 → 中文名（与抖音官方名一致，用于回退时输出）
+_QUALITY_LABELS = ['原画', '蓝光', '超清', '高清', '标清']
 
 
 def _check_url(url, timeout=10):
@@ -76,7 +83,7 @@ def _build_ordered_list(raw_dict):
         raw_dict: flv_pull_url 或 hls_pull_url_map 字典。
 
     Returns:
-        长度 5 的 URL 列表，索引 0=原画 4=省流。缺失画质用前一级填充。
+        长度 5 的 URL 列表，索引 0=原画 4=标清。缺失画质用前一级填充。
     """
     if not raw_dict:
         return []
@@ -109,7 +116,7 @@ def select_stream_url(room_info, quality_name='原画', check_health=True, quiet
 
     Args:
         room_info: enter_room_api 返回的房间信息字典。
-        quality_name: 画质名称（原画/超清/高清/标清/省流，支持英文别名）。
+        quality_name: 画质名称（原画/蓝光/超清/高清/标清，支持 sdk_key 别名）。
         check_health: 是否对推流地址做连通性检测。
 
     Returns:

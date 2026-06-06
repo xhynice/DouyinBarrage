@@ -51,7 +51,6 @@ from service.network import (
     build_http_headers,
     build_websocket_url, build_ws_cookie,
     resolve_live_id,
-    scrape_room_info,
     fetch_webcast_cursor,
     RoomNotFoundError,
 )
@@ -195,6 +194,8 @@ class DouyinBarrage:
         # ── 房间信息 ──
         self._room_id = None
         self._room_info = None
+        # room_info 过期标记: ffmpeg 崩后置 True,下次 _start_recording 重新查 API
+        self._room_info_stale = False
 
         # ── 等待开播 ──
         self._live_lock = threading.Lock()
@@ -211,6 +212,10 @@ class DouyinBarrage:
         self._video_recorder = None
         self._ws_url = ''
         self._stream_url = ''
+        # 录制重启背压：上次尝试时间戳，防止 ffmpeg 反复崩时热循环
+        self._last_recording_attempt = 0.0
+        # 录制相关操作的锁（wsOnOpen/看门狗/recorder 回调三个来源并发）
+        self._recording_lock = threading.Lock()
 
         # ── 面板刷新节流 ──
         self._panel_last = 0.0
@@ -306,29 +311,6 @@ class DouyinBarrage:
             logger.info("[房间] 无登录凭证，以游客模式采集（礼物等信息可能受限）")
         return self._ttwid
 
-    @property
-    def room_id(self):
-        """获取直播间真实 room_id，首次访问触发 HTTP 请求。
-
-        Side Effects:
-            首次访问时调用 enter_room_api 获取房间信息，
-            输出房间状态和主播名称日志。
-
-        Returns:
-            room_id 字符串。
-        """
-        if self._room_id:
-            return self._room_id
-        self._room_info = enter_room_api(
-            self.ttwid, self._ua, self._ua_version,
-            self.live_id, self.HTTP_TIMEOUT, session=self.session,
-        )
-        self._room_id = self._room_info['room_id']
-        status = self._room_info['status']
-        status_text = {2: '直播中', 4: '未开播'}.get(status, f'未知({status})')
-        logger.info(f'[房间] room_id={self._room_id}, 状态={status_text}, 主播={self.anchor_name}')
-        return self._room_id
-
     # ── 启动 / 停止 ──────────────────────────────
 
     @property
@@ -409,27 +391,58 @@ class DouyinBarrage:
 
     def _reset_recorder(self):
         """关闭并重建数据记录器（幂等操作）。"""
+        # 锁内: 快速操作 (video_recorder 持锁,避免与看门狗录制启动竞争)
+        with self._recording_lock:
+            if self._video_recorder:
+                try:
+                    self._video_recorder.stop()
+                except Exception as e:
+                    logger.debug(f"[录制] 停止录制异常: {e}")
+                self._video_recorder = None
+        # 锁外: 慢操作 (data_recorder 内部已线程安全,close 5s 不持锁)
         if self._data_recorder:
             try:
                 self._data_recorder.close()
             except Exception as e:
                 logger.debug(f"[数据] 关闭旧 recorder 异常: {e}")
-        if self._video_recorder:
-            try:
-                self._video_recorder.stop()
-                self._video_recorder = None
-            except Exception as e:
-                logger.debug(f"[录制] 停止录制异常: {e}")
         self._data_recorder = DataRecorder(self.anchor_name, self.live_id, self.config)
 
     # ── 录制管理 ────────────────────────────────
 
     def _start_recording(self):
-        """启动视频录制（如果启用）。"""
+        """启动视频录制（如果启用）。v2: 不再调用 provider 二次拉取地址。"""
+        with self._recording_lock:
+            self._start_recording_locked()
+
+    def _start_recording_locked(self):
+        """_start_recording 的内部实现，调用方需持有 _recording_lock。"""
         if not self._record_cfg.get('enabled', False):
             return
         if not self._room_info:
             return
+        if self._stop_event.is_set():
+            return
+        # 已经在录了就不重复启动
+        if self._video_recorder and self._video_recorder.is_recording:
+            return
+        # 30s 背压：避免 ffmpeg 反复崩时看门狗热循环重试
+        self._last_recording_attempt = time.time()
+
+        # 推流 URL 过期修复: ffmpeg 崩了说明 URL 可能已过期
+        # 重试用旧的 _room_info 会一直失败 → 刷新一次拿新 URL
+        if self._room_info_stale:
+            try:
+                new_info = self.query_room_api()
+                status = new_info.get('status')
+                if status != 2:
+                    logger.info(f"[录制] API 状态非开播 (status={status})，跳过重试")
+                    return
+                self._room_info = new_info
+                self._room_id = new_info['room_id']
+                self._room_info_stale = False
+                logger.info("[录制] 推流地址已刷新（ffmpeg 上次失败后重查 API）")
+            except Exception as e:
+                logger.warning(f"[录制] 刷新 room_info 失败: {e}，用旧 URL 重试")
 
         stream_info = select_stream_url(
             self._room_info,
@@ -446,29 +459,54 @@ class DouyinBarrage:
         if self._video_recorder is None:
             self._video_recorder = DouyinRecorder(
                 self.live_id, self.anchor_name,
-                stream_url_provider=self._refresh_stream_url,
-                live_status_provider=self.check_live_status,
+                on_failure=self._on_recorder_failure,
                 output_dir=output_dir,
                 session_dir=session_dir,
             )
         self._video_recorder.anchor_name = self.anchor_name
         self._video_recorder.start(stream_info['record_url'], self._record_cfg)
-        self._stream_url = stream_info['record_url']
-        quality = stream_info.get('quality', '?')
-        logger.info(f"[录制] {self.display_name} 画质={quality} 地址={stream_info['record_url'][:60]}...")
-        self._queue_handler.set_room_status(
-            self.live_id, 'collecting',
-            anchor=self.display_name,
-            msg_count=0,
-            elapsed=0,
-            rec_elapsed=0,
-        )
+        # 只有 ffmpeg 真正起来了才打"画质=xxx 地址=..."和更新面板，避免误导
+        if self._video_recorder._recording_active:
+            self._stream_url = stream_info['record_url']
+            quality = stream_info.get('quality', '?')
+            logger.info(f"[录制] {self.display_name} 画质={quality} 地址={stream_info['record_url'][:60]}...")
+            self._queue_handler.set_room_status(
+                self.live_id, 'collecting',
+                anchor=self.display_name,
+                msg_count=0,
+                elapsed=0,
+                rec_elapsed=0,
+            )
+        else:
+            logger.warning(f"[录制] {self.display_name} ffmpeg 未启动成功，将由看门狗重试")
+
+    def _on_recorder_failure(self, return_code):
+        """recorder 通知 fetcher ffmpeg 已退出。
+
+        v2 重构：recorder 不再做下播判断和重启，仅通知一次。
+        fetcher 清理 recorder 实例，由看门狗（30s 背压后）重新触发 _start_recording。
+        """
+        with self._recording_lock:
+            if self._stop_event.is_set():
+                return
+            logger.info(f"[录制] ffmpeg 退出 (code={return_code})，看门狗将重试")
+            if self._video_recorder is not None:
+                try:
+                    self._video_recorder.stop()
+                except Exception as e:
+                    logger.debug(f"[录制] 清理旧 recorder 异常: {e}")
+                self._video_recorder = None
+            # 记录崩溃时间，下一次看门狗检查会据此施加 30s 背压
+            self._last_recording_attempt = time.time()
+            # 标记 room_info 过期，下次 _start_recording 会重新查 API 拿新 URL
+            self._room_info_stale = True
 
     def _stop_recording(self):
         """停止视频录制。"""
-        if self._video_recorder:
-            self._video_recorder.stop()
-            self._video_recorder = None
+        with self._recording_lock:
+            if self._video_recorder:
+                self._video_recorder.stop()
+                self._video_recorder = None
 
     # ── API 方法提取 ──────────────────────────────
 
@@ -488,33 +526,6 @@ class DouyinBarrage:
             self.live_id, self.HTTP_TIMEOUT, session=self.session,
         )
 
-    def query_room_with_fallback(self):
-        """主 API + 备用 API 降级查询房间状态。
-
-        先调 room/web/enter，失败后用 scrape_room_info 备用。
-        供 refresh_stream_url 和 check_live_status 共用。
-
-        Returns:
-            dict: 房间信息，失败返回 None。
-        """
-        try:
-            info = self.query_room_api()
-            return info
-        except RoomNotFoundError:
-            raise  # 房间不存在，不尝试备用 API
-        except Exception as e:
-            logger.debug(f"[房间] 主 API 失败: {e}，尝试备用 API")
-
-        try:
-            info = scrape_room_info(self.session, self.live_id, self.HTTP_TIMEOUT)
-            if info:
-                logger.info(f"[房间] 备用 API 获取成功: status={info.get('status')}")
-                return info
-        except Exception as e:
-            logger.debug(f"[房间] 备用 API 也失败: {e}")
-
-        return None
-
     def refresh_ttwid(self):
         """刷新 ttwid（统一处理 RuntimeError 异常）。
 
@@ -529,21 +540,6 @@ class DouyinBarrage:
         except RuntimeError as e:
             logger.error(f"[房间] ttwid 刷新失败: {e}")
             return False
-
-    def check_live_status(self):
-        """检查当前直播状态（供录制器下播二次确认）。
-
-        Returns:
-            True: 仍在直播。
-            False: 已下播。
-            None: 无法确认（API 异常）。
-        """
-        info = self.query_room_with_fallback()
-        if info is None:
-            return None
-        if info.get('status') == 2:
-            return True
-        return False
 
     def _start_monitor_loop(self):
         """启动等待开播的监控循环（HTTP 轮询 + 状态通知）。
@@ -879,15 +875,25 @@ class DouyinBarrage:
             conn_stop.wait(timeout=interval + random.uniform(0, 2))
 
     def _watchdog_loop(self):
-        """看门狗线程，检测静默断连。
+        """健康守护线程（v3 合并版，单一线程做两件事）：
 
-        首次检测：30 秒无业务消息触发快速重连（过滤假活）
-        后续检测：60 秒无业务消息触发重连
-        完全无数据：使用 silence_timeout 配置
+        1. WS 健康检查：检测静默/假活，触发 _close_ws() 进入重连
+           - 完全无数据：用 SILENCE_TIMEOUT 强制重连
+           - 30s 无业务消息（首次检测）：快速重连过滤假活
+           - 60s 无业务消息（后续）：触发重连
+        2. 录制自愈：ffmpeg 崩了/启动失败时，30s 背压后自动重启
+           - 触发条件：配置开 ∧ WS 健康 ∧ 非等待开播 ∧ 未在录
+           - 必须收到过至少一条业务消息（空房间不浪费 ffmpeg）
+
+        为什么不用两个独立线程：
+          - 两个线程都要 conn_stop.wait(10s) 唤醒，唤醒时机一样
+          - WS 健康检查和录制自愈的"健康"语义相通，合并后意图更清晰
+          - 单一线程，单一 wait，单一 30s 背压
         """
         conn_stop = self._conn_stop
         check_interval = max(min(self.SILENCE_TIMEOUT // 3, 10), 3)
-        logger.debug(f"[看门狗] 线程启动，检查间隔={check_interval}s，超时阈值={self.SILENCE_TIMEOUT}s")
+        recording_retry_interval = 30.0
+        logger.debug(f"[看门狗] 线程启动，检查间隔={check_interval}s，录制背压={recording_retry_interval}s")
         watchdog_start = time.monotonic()
         first_check_done = False
         first_check_timeout = 30.0
@@ -895,10 +901,12 @@ class DouyinBarrage:
         try:
             while not conn_stop.is_set() and not self._stop_event.is_set():
                 conn_stop.wait(timeout=check_interval)
+                if self._stop_event.is_set() or conn_stop.is_set():
+                    break
+
+                # === 1. WS 健康检查 ===
                 if not self._connected_event.is_set():
-                    if self._stop_event.is_set() or conn_stop.is_set():
-                        break
-                    elapsed = time.time() - watchdog_start
+                    elapsed = time.monotonic() - watchdog_start
                     if elapsed > self.SILENCE_TIMEOUT:
                         logger.warning(f"[看门狗] 连接建立超时 ({elapsed:.0f}s)，强制重连")
                         try:
@@ -907,38 +915,56 @@ class DouyinBarrage:
                         except Exception:
                             pass
                         break
-                    logger.debug("[看门狗] 连接未建立，跳过检查")
                     continue
                 if self._last_msg_time <= 0:
-                    logger.debug("[看门狗] 最后消息时间未初始化，跳过检查")
                     continue
                 with self._last_msg_time_lock:
                     silence = time.time() - self._last_msg_time
-                logger.debug(f"[看门狗] 静默时间: {silence:.0f}s")
                 if silence > self.SILENCE_TIMEOUT:
                     logger.warning(f"[看门狗] {silence:.0f}s 无数据 (阈值={self.SILENCE_TIMEOUT}s)，触发重连")
                     self._close_ws()
                     break
-
                 with self._last_business_msg_time_lock:
                     if self._last_business_msg_time > 0:
                         business_silence = time.time() - self._last_business_msg_time
                     else:
                         business_silence = time.time() - getattr(self, '_ws_connected_at', time.time())
-
                 if not first_check_done:
                     if self._last_business_msg_time > 0:
                         first_check_done = True
-                        logger.debug("[看门狗] 首次检测通过，已收到业务消息")
                     elif business_silence > first_check_timeout:
-                        logger.info(f"[看门狗] {business_silence:.0f}s 无业务消息 (首次检测超时 {first_check_timeout:.0f}s)，快速重连")
+                        logger.info(f"[看门狗] {business_silence:.0f}s 无业务消息 (首次检测超时)，快速重连")
                         self._close_ws()
                         break
                 else:
                     if business_silence > normal_check_timeout:
-                        logger.info(f"[看门狗] {business_silence:.0f}s 无业务消息 (仅有低价值消息)，触发重连")
+                        logger.info(f"[看门狗] {business_silence:.0f}s 无业务消息，触发重连")
                         self._close_ws()
                         break
+
+                # === 2. 录制自愈 ===
+                if not self._record_cfg.get('enabled', False):
+                    continue
+                if self._is_waiting_live():
+                    continue
+                is_recording = bool(
+                    self._video_recorder and self._video_recorder.is_recording
+                )
+                if is_recording:
+                    continue
+                if time.time() - self._last_recording_attempt < recording_retry_interval:
+                    continue
+                # 必须收到过业务消息,空房间/未开播不浪费 ffmpeg
+                with self._last_business_msg_time_lock:
+                    if self._last_business_msg_time <= 0:
+                        continue
+                logger.info(
+                    f"[录制] 检测到应录制但未录制，尝试自动恢复（30s 背压已过）"
+                )
+                try:
+                    self._start_recording()
+                except Exception as e:
+                    logger.warning(f"[录制] 自愈失败: {e}")
         except Exception as e:
             logger.error(f"[看门狗] 线程异常: {e}")
 
@@ -991,28 +1017,6 @@ class DouyinBarrage:
         except Exception as e:
             logger.warning(f"[数据] 保存主播信息失败: {e}")
 
-    def _refresh_stream_url(self):
-        """重新调 API 获取最新推流地址（多 API 降级）。
-
-        Returns:
-            str: 推流地址（直播中）。
-            False: 明确已下播，停止重试。
-            None: API 调用失败，保留旧地址继续重试。
-        """
-        info = self.query_room_with_fallback()
-        if info is None:
-            logger.debug(f"[录制] 刷新推流地址失败: 所有 API 均失败")
-            return None
-        if info.get('status') != 2:
-            logger.info(f"[录制] {self.display_name} 已下播，停止重试")
-            return False
-        stream_info = select_stream_url(info, self._record_cfg.get('quality', '原画'), check_health=False, quiet=True)
-        if stream_info.get('is_live'):
-            logger.info(f"[录制] 已刷新推流地址 (画质 {stream_info['quality']})")
-            self._stream_url = stream_info['record_url']
-            return stream_info['record_url']
-        return None
-
     def _wsOnOpen(self, ws):
         """WebSocket 连接成功回调。
 
@@ -1060,7 +1064,15 @@ class DouyinBarrage:
         # 首次连接时保存主播信息和下载图片
         self._save_room_info()
 
-        # 启动视频录制（如果启用）
+        # WS 握手成功 = 房间存在的证据，立即启动录制。
+        # recorder 不再做二次 API 查询(见 service/recorder.py:127),
+        # 不存在"开播瞬间 API 抖动误判下播"的问题。
+        # 失败则由 on_failure 回调 + 看门狗(30s 背压)负责恢复。
+        # 注意:WS 重连时不主动停旧 ffmpeg,因为:
+        #   1. 推流地址 ≠ WS 地址,WS 抖动通常不影响推流 TCP
+        #   2. ffmpeg 自带 -reconnect_streamed + -reconnect_delay_max 60 自愈
+        #   3. 主动重启 = 不必要的空窗 + 文件碎片
+        #   4. URL 真变了 → ffmpeg 自然失败 → on_failure → 看门狗按需重启(查新 URL)
         self._start_recording()
 
     def _wsOnMessage(self, ws, message):
@@ -1168,7 +1180,12 @@ class DouyinBarrage:
                         # 日志 + 记录
                         msg_text = r.get('msg', '')
                         if msg_text:
-                            logger.debug(msg_text)
+                            # 控制消息(开始/暂停/结束)用 INFO 提示用户,
+                            # 普通消息(弹幕/礼物等)保持 DEBUG 避免刷屏
+                            if r.get('type') == 'control':
+                                logger.info(msg_text)
+                            else:
+                                logger.debug(msg_text)
 
                         rec_type = r.get('type', '')
                         rec_data = r.get('data')

@@ -36,19 +36,24 @@ class DouyinRecorder:
     """抖音直播录制管理器。
 
     通过 subprocess 调用 ffmpeg 下载推流，支持 ts/flv/mp4 封装格式。
-    支持分段录制、文件大小/时长限制、自动转码、下播二次确认。
+    支持分段录制、文件大小/时长限制、自动转码。
+
+    设计原则（v2 重构）：
+        - recorder 不做"是否还在直播"的判断，那是 fetcher 的职责
+        - recorder 不主动调用 API 拉流地址（避免与 fetcher 重复查询、状态误判）
+        - ffmpeg 异常退出时只通过 on_failure 回调通知外部，由 fetcher 看门狗统一决策
 
     Args:
         live_id: 直播间 ID。
         anchor_name: 主播昵称（用于目录和文件名）。
-        stream_url_provider: 可选回调，返回最新推流地址。
-            返回 str = 新地址，False = 已下播，None = 失败保留旧地址。
-        live_status_provider: 可选回调，用于下播二次确认。
-            返回 True = 仍在直播，False = 确认下播。
+        on_failure: 可选回调，签名 (return_code: int) -> None。
+            ffmpeg 进程退出时（排除 stop() 主动停止）触发一次，用于通知 fetcher。
+        output_dir: 录制输出根目录。
+        session_dir: 可选，会话目录（外部传入时与弹幕数据共存）。
     """
 
-    def __init__(self, live_id, anchor_name='', stream_url_provider=None,
-                 live_status_provider=None, output_dir='data', session_dir=None):
+    def __init__(self, live_id, anchor_name='', on_failure=None,
+                 output_dir='data', session_dir=None):
         self.live_id = live_id
         self.anchor_name = anchor_name
         self._output_dir = output_dir
@@ -61,8 +66,7 @@ class DouyinRecorder:
         self._monitor_thread = None
         self._recording_active = False  # 录制是否曾启动（stop()时仍需清理）
         self._start_time = 0.0
-        self._stream_url_provider = stream_url_provider
-        self._live_status_provider = live_status_provider
+        self._on_failure = on_failure
 
     @property
     def is_recording(self):
@@ -88,7 +92,6 @@ class DouyinRecorder:
                 - segment_time: 分段时长（秒），0=不分段
                 - segment_size: 分段文件大小（MB），0=不限制
                 - auto_convert: 录制结束后自动 ts→mp4 转码
-                - recheck_delay: 下播二次确认延迟（秒），0=不确认
         """
         if self.is_recording:
             logger.warning(f"[录制] {self.display_name} 已在录制中")
@@ -124,18 +127,12 @@ class DouyinRecorder:
     def _start_ffmpeg(self):
         """启动 ffmpeg 进程（支持分段录制）。
 
+        推流地址由调用方通过 start(stream_url, ...) 传入，
+        recorder 不再做二次 API 拉取（避免与 fetcher 重复查询）。
+
         Returns:
             bool: 进程成功启动返回 True。
         """
-        if self._stream_url_provider and not self._stop_event.is_set():
-            fresh_url = self._stream_url_provider()
-            if fresh_url is False:
-                logger.info(f"[录制] {self.display_name} 已下播，停止录制重试")
-                self._stop_event.set()
-                return False
-            if fresh_url:
-                self._record_url = fresh_url
-
         if not self._record_url:
             logger.error(f"[录制] {self.display_name} 推流地址为空，无法启动")
             return False
@@ -268,99 +265,51 @@ class DouyinRecorder:
         self._record_cfg = {}
         self._recording_active = False
         if self._monitor_thread and self._monitor_thread.is_alive():
-            self._monitor_thread.join(timeout=15)
+            # on_failure 在 monitor 线程内调用时,不能 join 自己
+            if self._monitor_thread is not threading.current_thread():
+                self._monitor_thread.join(timeout=15)
 
         # 自动转码（即使 ffmpeg 已异常退出，只要有录制曾启动就执行）
         if was_recording and auto_convert:
             self._convert_ts_to_mp4()
 
     def _start_monitor(self):
-        """启动后台监控线程，ffmpeg 异常退出后自动重启。"""
+        """启动后台监控线程，仅在 ffmpeg 异常退出时通知外部一次。
+
+        v2 重构：移除 ffmpeg 自动重启和"下播二次确认"逻辑。
+        录制恢复由 fetcher 看门狗统一调度，避免 recorder 单方面判下播。
+        """
         if self._monitor_thread and self._monitor_thread.is_alive():
             return
 
         def loop():
-            restart_delay = 5
-            max_restart_delay = 120
             while not self._stop_event.is_set():
                 proc = self._process
                 if proc and proc.poll() is not None:
                     return_code = proc.returncode
                     self._process = None
                     if self._stop_event.is_set():
-                        if return_code not in (0, 255):
-                            logger.warning(f"[录制] {self.display_name} 进程退出 (code={return_code})")
+                        # 主动 stop() 触发的退出，静默返回
                         break
-
-                    # ── 下播二次确认 ──
-                    recheck_delay = self._record_cfg.get('recheck_delay', 10)
-                    if recheck_delay > 0 and return_code not in (0,):
-                        confirmed = self._recheck_live_status(recheck_delay)
-                        if self._stop_event.is_set():
-                            break
-                        if confirmed is False:
-                            logger.info(f"[录制] {self.display_name} 二次确认已下播，停止录制")
-                            self._stop_event.set()
-                            break
-                        elif confirmed is True:
-                            logger.info(f"[录制] {self.display_name} 二次确认仍在直播，立即重连")
-                        else:
-                            logger.info(f"[录制] {self.display_name} 二次确认失败（API异常），按原策略重连")
-
-                    if return_code not in (0, 255):
-                        logger.warning(f"[录制] {self.display_name} 进程异常退出 (code={return_code})，{restart_delay}s 后重启")
+                    # ffmpeg 异常退出：通知 fetcher，由看门狗决定是否重启录制
+                    if return_code == 0:
+                        logger.info(f"[录制] {self.display_name} 进程正常退出 (code=0)")
+                    elif return_code == 255:
+                        logger.info(f"[录制] {self.display_name} 进程退出 (code=255)")
                     else:
-                        logger.info(f"[录制] {self.display_name} 进程退出 (code={return_code})，{restart_delay}s 后重启")
-                    self._stop_event.wait(timeout=restart_delay)
-                    if self._stop_event.is_set():
-                        break
-                    if not self._start_ffmpeg():
-                        restart_delay = min(restart_delay * 2, max_restart_delay)
-                    else:
-                        restart_delay = 5
-                    continue
+                        logger.warning(f"[录制] {self.display_name} 进程异常退出 (code={return_code})")
+                    if self._on_failure:
+                        try:
+                            self._on_failure(return_code)
+                        except Exception as e:
+                            logger.debug(f"[录制] on_failure 回调异常: {e}")
+                    break
                 self._stop_event.wait(timeout=5)
 
         self._monitor_thread = threading.Thread(
             target=loop, daemon=True, name=f'rec-monitor-{self.live_id}'
         )
         self._monitor_thread.start()
-
-    def _recheck_live_status(self, delay):
-        """下播二次确认：延迟后复查直播状态。
-
-        Args:
-            delay: 延迟秒数。
-
-        Returns:
-            True  = 确认仍在直播（网络抖动）。
-            False = 确认已下播。
-            None  = 无法确认（API 异常）。
-        """
-        logger.info(f"[录制] {self.display_name} 流中断，{delay}s 后复查直播状态...")
-        time.sleep(delay)
-
-        if self._stop_event.is_set():
-            return None
-
-        if self._live_status_provider:
-            try:
-                is_live = self._live_status_provider()
-                return is_live
-            except Exception as e:
-                logger.debug(f"[录制] 下播确认 API 调用失败: {e}")
-                return None
-
-        # 无 provider 时尝试用 stream_url_provider
-        if self._stream_url_provider:
-            result = self._stream_url_provider()
-            if result is False:
-                return False
-            elif result and isinstance(result, str):
-                return True
-            return None
-
-        return None
 
     def _convert_ts_to_mp4(self):
         """将录制的 ts 文件自动转码为 mp4，转码成功后删除原 ts 文件。

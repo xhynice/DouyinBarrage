@@ -62,11 +62,10 @@ barrage:
 record:
   enabled: false              # 录制开关
   format: ts                  # 封装: ts / flv / mp4
-  quality: 原画               # 画质: 原画/超清/高清/标清/省流
+  quality: 原画               # 画质: 原画/蓝光/超清/高清/标清（与抖音官方名一致）
   segment_time: 0             # 分段时长（秒），0=不分段
   segment_size: 0             # 分段大小（MB），0=不限制
   auto_convert: true          # 结束后自动 ts→mp4
-  recheck_delay: 10           # 下播后等待重开秒数
 
 api:
   enabled: false              # HTTP API 开关

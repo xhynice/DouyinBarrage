@@ -45,21 +45,27 @@ _display_config = {
     'record_enabled': False,
     'record_quality': '原画',
     'record_format': 'ts',
+    'record_segment_time': 0,
+    'record_segment_size': 0,
+    'record_auto_convert': True,
     'barrage_cfg': {'csv': True, 'sqlite': False},
 }
 
 
 def status_line():
-    """构建单行状态，供 display_loop 周期性输出。"""
+    """构建状态面板：顶部全局一行 + 每房间一行。"""
     statuses = get_room_statuses()
     if not statuses:
         return ''
     with _active_rooms_lock:
         active_count = len(_active_rooms)
-    now_str = time.strftime('%H:%M:%S')
+    now_str = time.strftime('%Y-%m-%d %H:%M:%S')
     rec_enabled = _display_config.get('record_enabled', False)
     rec_quality = _display_config.get('record_quality', '原画')
     rec_fmt = _display_config.get('record_format', 'ts')
+    rec_seg_time = _display_config.get('record_segment_time', 0)
+    rec_seg_size = _display_config.get('record_segment_size', 0)
+    rec_auto_conv = _display_config.get('record_auto_convert', True)
 
     # 弹幕保存格式
     barrage_cfg = _display_config.get('barrage_cfg', {})
@@ -70,32 +76,43 @@ def status_line():
         fmts.append('sqlite')
     barrage_fmt = ','.join(fmts) if fmts else '无'
 
+    # 顶部全局
     parts = [f"共监测{active_count}个直播中"]
     if rec_enabled:
         parts.append(f"录制: [{rec_quality}] {rec_fmt}")
+        seg_parts = []
+        if rec_seg_time:
+            seg_parts.append(f"{rec_seg_time}s")
+        if rec_seg_size:
+            seg_parts.append(f"{rec_seg_size}MB")
+        if seg_parts:
+            parts.append(f"分段: {'/'.join(seg_parts)}")
+        parts.append(f"转码: {'开' if rec_auto_conv else '关'}")
     parts.append(f"弹幕: {barrage_fmt}")
     parts.append(f"当前时间: {now_str}")
+    lines = [" | ".join(parts)]
 
+    # 每房间
     for live_id, info in statuses.items():
         if info.get('status') == 'waiting':
             anchor = info.get('anchor', live_id)
             interval = info.get('interval', '?')
-            parts.append(f"{anchor} [监测中] ({interval}s)")
+            lines.append(f"  {anchor} [监测中] ({interval}s)")
         elif info.get('status') == 'collecting':
             anchor = info.get('anchor', live_id)
             count = info.get('msg_count', 0)
             elapsed = info.get('elapsed', 0)
             rate = count / elapsed if elapsed > 0 else 0
-            s = f"{anchor} [弹幕] {count}条 ({rate:.1f}/s)"
+            s = f"  {anchor} [弹幕] {count}条 ({rate:.1f}/s)"
             rec_elapsed = info.get('rec_elapsed', 0)
             if rec_elapsed > 0:
                 m, sec = divmod(int(rec_elapsed), 60)
                 h, m = divmod(m, 60)
                 dur = f"{h:02d}:{m:02d}:{sec:02d}" if h > 0 else f"{m:02d}:{sec:02d}"
                 s += f" [录制] {dur}"
-            parts.append(s)
+            lines.append(s)
 
-    return " | ".join(parts)
+    return "\n".join(lines)
 
 
 def signal_handler(signum, frame):
@@ -518,6 +535,9 @@ def main_multi(room_list, log_level, live_stop, record=None):
     print("热加载: 修改 rooms.txt 自动增删房间\n")
     _display_config['record_quality'] = rc.get('quality', '原画')
     _display_config['record_format'] = rc.get('format', 'ts')
+    _display_config['record_segment_time'] = rc.get('segment_time', 0)
+    _display_config['record_segment_size'] = rc.get('segment_size', 0)
+    _display_config['record_auto_convert'] = rc.get('auto_convert', True)
     _display_config['barrage_cfg'] = cfg.get('barrage', {'csv': True, 'sqlite': False})
     if log_level:
         _display_config['log_level'] = log_level
@@ -531,12 +551,21 @@ def main_multi(room_list, log_level, live_stop, record=None):
             time.sleep(3.5)
 
     # 周期性状态行（房间启动后再开始，确保日志已刷出）
+    # 智能周期: 有开播 30s, 全未开播跟随 monitor 轮询 (160s)
     def _periodic_status():
         while not _shutting_down:
-            time.sleep(5)
+            statuses = get_room_statuses()
+            any_collecting = any(
+                s.get('status') == 'collecting' for s in statuses.values()
+            )
+            sleep_s = 30 if any_collecting else 160
+            for _ in range(int(sleep_s / 0.5)):
+                if _shutting_down:
+                    return
+                time.sleep(0.5)
             line = status_line()
             if line:
-                print(f"\n{line}")
+                print(f"\n{line}", flush=True)
     threading.Thread(target=_periodic_status, daemon=True).start()
 
     # 启动文件监控
