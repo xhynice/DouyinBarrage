@@ -568,11 +568,6 @@ class DouyinBarrage:
                             self._room_info = info
                             self._on_live_started(source='api')
                             return
-                    except RoomNotFoundError as e:
-                        logger.error(f'[监控] {e}，停止监控')
-                        self._stop_reason = 'room_not_found'
-                        self._stop_event.set()
-                        return
                     except Exception as e:
                         logger.warning(f'[监控] API 检查失败: {e}')
                         if any(kw in str(e).lower() for kw in ('sign', '403', 'unauthorized', 'cookie')):
@@ -814,6 +809,17 @@ class DouyinBarrage:
                 logger.error(f"[网络] API 异常: {e}")
             except Exception as e:
                 logger.error(f"[连接] WebSocket 异常: {e}")
+
+            # ── 统一处理：已进入等待模式（消息处理器触发）──
+            if self._is_waiting_live():
+                while not self._stop_event.is_set():
+                    if self._live_event.wait(timeout=1.0):
+                        break
+                if self._stop_event.is_set():
+                    break
+                self._live_event.clear()
+                self._reconnect_count = 0
+                continue
 
             # ── 重连前快速检测直播间状态，下播则直接进入等待模式 ──
             if not self._is_waiting_live() and not self._stop_event.is_set():
@@ -1249,3 +1255,4 @@ class DouyinBarrage:
         """
         logger.info(f"[连接] WebSocket 已关闭 (code={code})")
         self._connected_event.clear()
+        self._conn_stop.set()  # 停掉看门狗/心跳/统计线程，避免用旧时间计算超时
