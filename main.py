@@ -552,7 +552,16 @@ def main_multi(room_list, log_level, live_stop, record=None):
 
     # 周期性状态行（房间启动后再开始，确保日志已刷出）
     # 智能周期: 有开播 30s, 全未开播跟随 monitor 轮询 (160s)
+    # 启动后先立即打一行(避免首次等 160s),再进智能循环
     def _periodic_status():
+        # 启动后给 monitor 一点时间把首轮状态写进 dict(最多 ~2s)
+        for _ in range(int(2.0 / 0.5)):
+            if _shutting_down:
+                return
+            time.sleep(0.5)
+        line = status_line()
+        if line:
+            print(f"\n{line}", flush=True)
         while not _shutting_down:
             statuses = get_room_statuses()
             any_collecting = any(
