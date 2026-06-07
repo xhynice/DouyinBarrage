@@ -557,7 +557,7 @@ class DouyinBarrage:
 
         def loop():
             try:
-                stop_event.wait(0.3)
+                stop_event.wait(5)
                 if stop_event.is_set() or self._stop_event.is_set():
                     return
                 while not stop_event.is_set() and not self._stop_event.is_set():
