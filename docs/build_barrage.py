@@ -34,8 +34,10 @@ OUTPUT_DIR = os.path.join(SCRIPT_DIR, 'docs', 'data', 'barrage')
 def _resolve_data_dir():
     """从 config.yaml 读取 output_dir，不存在则回退 'data'。"""
     try:
-        from base.utils import load_config
-        cfg = load_config('config.yaml', {})
+        import yaml
+        config_path = os.path.join(SCRIPT_DIR, 'config.yaml')
+        with open(config_path, 'r', encoding='utf-8') as f:
+            cfg = yaml.safe_load(f) or {}
         file_dir = cfg.get('output_dir', 'data')
     except Exception:
         file_dir = 'data'
