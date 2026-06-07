@@ -16,6 +16,7 @@ import signal
 import sys
 import threading
 import time
+from datetime import datetime
 
 if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -594,7 +595,8 @@ def main_multi(room_list, log_level, live_stop, record=None):
             load_rooms_from_config,
         )
 
-    print(f"\n[主控] {len(room_list)} 个采集线程已启动\n")
+    now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print(f"\n[主控] {len(room_list)} 个采集线程已启动 | 当前时间: {now_str}\n")
 
     # 等待直到所有房间线程退出或收到停止信号
     while not _shutting_down:
