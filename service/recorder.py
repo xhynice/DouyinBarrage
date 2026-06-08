@@ -1,13 +1,12 @@
-"""录制管理器：FFmpeg 子进程管理，分段录制，自动转码，下播二次确认。
+"""录制管理器：FFmpeg 子进程管理，分段录制，自动转码。
 
 DouyinRecorder 通过 subprocess.Popen 启动 ffmpeg 下载推流，
-后台 daemon 线程监控进程健康，异常退出自动重启。
+后台 daemon 线程监控进程健康，异常退出通知 fetcher 看门狗。
 
 功能：
     - 分段录制（按时长或文件大小自动切片）
     - 文件大小 / 时长限制
-    - 录制完成后自动 ts→mp4 转码
-    - 下播二次确认（流中断后延迟复查 API，避免网络抖动误判）
+    - 录制完成后自动 ts→mp4 转码（ffprobe 验证完整性后再删 ts）
 """
 
 import glob
@@ -159,7 +158,6 @@ class DouyinRecorder:
             '-sn', '-dn',
             '-reconnect_delay_max', '60',
             '-reconnect_streamed',
-            '-reconnect_at_eof',
             '-max_muxing_queue_size', '1024',
             '-correct_ts_overflow', '1',
             '-avoid_negative_ts', '1',
@@ -246,7 +244,7 @@ class DouyinRecorder:
                         pass
 
                 try:
-                    self._process.wait(timeout=10)
+                    self._process.wait(timeout=30)
                 except subprocess.TimeoutExpired:
                     logger.warning(f"[录制] ffmpeg 未响应，强制终止")
                     try:
@@ -316,9 +314,9 @@ class DouyinRecorder:
 
         安全策略（参考 DouyinLiveRecorder）：
             1. 检查源文件存在且非空
-            2. ffmpeg 完成且返回码为 0 才算成功
-            3. sleep(1) 确保文件句柄释放后再删除
-            4. 删除前再次确认 mp4 存在且 ts 仍存在
+            2. ffmpeg 转码完成 + ffprobe 验证 mp4 完整才算成功
+            3. sleep(3) 确保文件句柄释放后再删除 ts
+            4. 删除后 sleep(2) 验证 ts 是否真正消失
         """
         if not self._session_dir or not os.path.isdir(self._session_dir):
             return
@@ -347,6 +345,16 @@ class DouyinRecorder:
             mp4_file = ts_file.rsplit('.', 1)[0] + '.mp4'
             if os.path.exists(mp4_file):
                 logger.debug(f"[转码] 跳过已存在: {os.path.basename(mp4_file)}")
+                # mp4 存在但 ts 还在 → 补删 ts
+                if os.path.exists(ts_file):
+                    try:
+                        os.remove(ts_file)
+                        time.sleep(2)
+                        if not os.path.exists(ts_file):
+                            deleted += 1
+                            logger.debug(f"[转码] 补删残留 ts: {os.path.basename(ts_file)}")
+                    except OSError:
+                        pass
                 continue
 
             try:
@@ -359,23 +367,42 @@ class DouyinRecorder:
                      mp4_file],
                     capture_output=True, timeout=300,
                 )
-                if result.returncode == 0 and os.path.exists(mp4_file) and os.path.getsize(mp4_file) > 0:
-                    converted += 1
-                    logger.info(f"[转码] 完成: {os.path.basename(mp4_file)}")
-                    # 安全删除原 ts：等 1 秒确保文件句柄释放
-                    time.sleep(1)
-                    if os.path.exists(ts_file) and os.path.exists(mp4_file):
-                        try:
-                            os.remove(ts_file)
-                            deleted += 1
-                            logger.debug(f"[转码] 已删除: {os.path.basename(ts_file)}")
-                        except OSError as e:
-                            logger.warning(f"[转码] 删除失败: {os.path.basename(ts_file)}: {e}")
-                else:
+                if result.returncode != 0 or not os.path.exists(mp4_file) or os.path.getsize(mp4_file) == 0:
                     logger.warning(f"[转码] 失败 (code={result.returncode}): {os.path.basename(ts_file)}")
-                    # 转码失败的 mp4 残留文件清理
                     if os.path.exists(mp4_file) and os.path.getsize(mp4_file) == 0:
                         os.remove(mp4_file)
+                    continue
+
+                # ffprobe 验证 mp4 完整性
+                try:
+                    probe = subprocess.run(
+                        ['ffprobe', '-v', 'error', '-show_entries',
+                         'format=duration', '-of', 'csv=p=0', mp4_file],
+                        capture_output=True, timeout=30,
+                    )
+                    if probe.returncode != 0 or not probe.stdout.strip():
+                        logger.warning(f"[转码] mp4 验证失败，保留 ts: {os.path.basename(ts_file)}")
+                        os.remove(mp4_file)
+                        continue
+                except FileNotFoundError:
+                    logger.debug("[转码] ffprobe 未安装，跳过完整性验证")
+
+                converted += 1
+                logger.info(f"[转码] 完成: {os.path.basename(mp4_file)}")
+
+                # 等待文件句柄释放后删除 ts
+                time.sleep(3)
+                if os.path.exists(ts_file) and os.path.exists(mp4_file):
+                    try:
+                        os.remove(ts_file)
+                        time.sleep(2)
+                        if not os.path.exists(ts_file):
+                            deleted += 1
+                            logger.debug(f"[转码] 已删除: {os.path.basename(ts_file)}")
+                        else:
+                            logger.warning(f"[转码] ts 删除后仍存在: {os.path.basename(ts_file)}")
+                    except OSError as e:
+                        logger.warning(f"[转码] 删除失败: {os.path.basename(ts_file)}: {e}")
             except subprocess.TimeoutExpired:
                 logger.warning(f"[转码] 超时: {os.path.basename(ts_file)}")
             except Exception as e:
