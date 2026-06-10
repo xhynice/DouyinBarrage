@@ -7,6 +7,8 @@ sign.js 包含完整的 webmssdk + Proxy polyfill，来自 DouYin_Spider 项目�
 首次调用时会复制 sign.js 到临时目录并追加 stdin 读取接口，原始文件不被修改。
 """
 
+__all__ = ['generate_signature']
+
 import hashlib
 import json
 import logging

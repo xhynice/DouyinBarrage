@@ -9,6 +9,8 @@ DouyinRecorder 通过 subprocess.Popen 启动 ffmpeg 下载推流，
     - 录制完成后自动 ts→mp4 转码（ffprobe 验证完整性后再删 ts）
 """
 
+__all__ = ['DouyinRecorder', 'check_ffmpeg']
+
 import glob
 import logging
 import os
@@ -83,6 +85,11 @@ class DouyinRecorder:
             return time.time() - self._start_time
         return 0
 
+    @property
+    def session_dir(self):
+        """当前录制会话目录（只读）。"""
+        return self._session_dir
+
     def start(self, stream_url, record_cfg):
         """启动录制。
 
@@ -155,14 +162,7 @@ class DouyinRecorder:
             '-analyzeduration', '20000000',
             '-probesize', '10000000',
             '-fflags', '+discardcorrupt',
-            '-i', self._record_url,
-            '-bufsize', '8000k',
-            '-sn', '-dn',
-            '-reconnect_delay_max', '60',
-            '-reconnect_streamed',
-            '-max_muxing_queue_size', '1024',
-            '-correct_ts_overflow', '1',
-            '-avoid_negative_ts', '1',
+            '-re', '-i', self._record_url,
         ]
 
         fmt = self._record_cfg.get('format', 'ts')
@@ -174,30 +174,42 @@ class DouyinRecorder:
         if segment_size > 0:
             cmd.extend(['-fs', f'{segment_size}M'])
 
+        # 通用输出选项（参考 DouyinLiveRecorder，放在编码参数之后）
+        common_output_opts = [
+            '-bufsize', '8000k',
+            '-sn', '-dn',
+            '-reconnect_delay_max', '60',
+            '-reconnect_streamed', '-reconnect_at_eof',
+            '-max_muxing_queue_size', '2048',
+            '-correct_ts_overflow', '1',
+            '-avoid_negative_ts', '1',
+        ]
+
         if use_segment:
             # 分段模式：输出用 segment muxer
             base_no_ext = os.path.splitext(self._save_path)[0]
             pattern = f'{base_no_ext}_%03d.{fmt}'
             cmd.extend(['-c:v', 'copy', '-c:a', 'copy'])
-
-            seg_mux_args = [
+            cmd.extend(common_output_opts)
+            cmd.extend([
                 '-f', 'segment',
                 '-segment_time', str(segment_time if segment_time > 0 else 3600),
                 '-segment_format', fmt,
                 '-reset_timestamps', '1',
-            ]
-            cmd.extend(seg_mux_args)
-            cmd.append(pattern)
+                pattern,
+            ])
         elif fmt == 'flv':
-            cmd.extend(['-c:v', 'copy', '-c:a', 'copy', '-bsf:a', 'aac_adtstoasc',
-                        '-map', '0', '-f', 'flv', self._save_path])
+            cmd.extend(['-c:v', 'copy', '-c:a', 'copy', '-bsf:a', 'aac_adtstoasc', '-map', '0'])
+            cmd.extend(common_output_opts)
+            cmd.extend(['-f', 'flv', self._save_path])
         elif fmt == 'mp4':
-            cmd.extend(['-c:v', 'copy', '-c:a', 'copy',
-                        '-movflags', 'frag_keyframe+empty_moov',
-                        '-map', '0', '-f', 'mp4', self._save_path])
+            cmd.extend(['-c:v', 'copy', '-c:a', 'copy', '-movflags', 'frag_keyframe+empty_moov', '-map', '0'])
+            cmd.extend(common_output_opts)
+            cmd.extend(['-f', 'mp4', self._save_path])
         else:
-            cmd.extend(['-c:v', 'copy', '-c:a', 'copy',
-                        '-map', '0', '-f', 'mpegts', self._save_path])
+            cmd.extend(['-c:v', 'copy', '-c:a', 'copy', '-map', '0'])
+            cmd.extend(common_output_opts)
+            cmd.extend(['-f', 'mpegts', self._save_path])
 
         if use_segment:
             logger.info(f"[录制] {self.display_name} 开始分段录制 → {pattern}")

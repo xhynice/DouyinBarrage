@@ -4,6 +4,16 @@
 抖音 API 参数（APP_ID、VERSION_CODE 等）集中在此维护，更新时只需改一处。
 """
 
+__all__ = [
+    'USER_AGENTS', 'APP_ID', 'LIVE_ID', 'VERSION_CODE', 'WEBCAST_SDK_VERSION',
+    'DID_RULE', 'DEVICE_PLATFORM', 'LOW_VALUE_TYPES', 'INTERACTIVE_TYPES',
+    'METHOD_TO_CONFIG', 'SCRIPT_DIR', 'DEFAULT_CONFIG',
+    'load_config', 'load_cookies', 'update_room_name_in_config',
+    'sanitize_dir_name', 'generate_user_unique_id', 'generate_ms_token',
+    'extract_ua_version', 'fmt_fans_club', 'fmt_grade', 'rotate_ua',
+    'get_user_id', 'get_anchor_dir',
+]
+
 import os
 import logging
 import random

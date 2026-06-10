@@ -29,14 +29,13 @@ if __package__ is None:
         sys.path.insert(0, _script_dir)
 
 from service.fetcher import DouyinBarrage
-from base.utils import update_room_name_in_config, load_config, DEFAULT_CONFIG
+from base.utils import update_room_name_in_config, load_config, DEFAULT_CONFIG, _config_write_lock
 from base.output import RoomLogFilter, get_room_statuses
 from service.recorder import check_ffmpeg
 
 _shutting_down = False
 _active_rooms = {}  # {room_id: {'instance': DouyinBarrage, 'thread': Thread, 'config': dict}}
 _active_rooms_lock = threading.Lock()
-_rooms_file_lock = threading.Lock()  # 保护 rooms.txt 读写
 
 logger = logging.getLogger(__name__)
 
@@ -251,7 +250,7 @@ def _comment_room_in_rooms_file(room_id, rooms_file=None):
     """在 rooms.txt 中注释掉指定房间，防止热加载重复启动。"""
     if rooms_file is None:
         rooms_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rooms.txt')
-    with _rooms_file_lock:
+    with _config_write_lock:
         try:
             with open(rooms_file, 'r', encoding='utf-8') as f:
                 lines = f.readlines()

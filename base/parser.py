@@ -11,6 +11,8 @@ HANDLERS 字典将 WebSocket method 名（如 'WebcastChatMessage'）
 映射到对应的解析函数，供 fetcher.py 消息分发使用。
 """
 
+__all__ = ['HANDLERS', 'parse_proto']
+
 import logging
 import time
 

@@ -194,6 +194,7 @@ class DouyinBarrage:
         # ── 房间信息 ──
         self._room_id = None
         self._room_info = None
+        self._room_info_lock = threading.Lock()
         # room_info 过期标记: ffmpeg 崩后置 True,下次 _start_recording 重新查 API
         self._room_info_stale = False
 
@@ -222,7 +223,8 @@ class DouyinBarrage:
 
     @property
     def anchor_name(self):
-        return self._room_info.get('anchor_name', '') if self._room_info else ''
+        with self._room_info_lock:
+            return self._room_info.get('anchor_name', '') if self._room_info else ''
 
     @property
     def display_name(self):
@@ -236,7 +238,8 @@ class DouyinBarrage:
             dict: 包含 room_info, ws_url, stream_url, is_recording,
                   rec_elapsed, record_cfg 等字段。
         """
-        info = self._room_info or {}
+        with self._room_info_lock:
+            info = dict(self._room_info) if self._room_info else {}
         is_recording = bool(
             self._video_recorder and self._video_recorder.is_recording
         )
@@ -250,7 +253,7 @@ class DouyinBarrage:
             'is_recording': is_recording,
             'rec_elapsed': rec_elapsed,
             'record_cfg': dict(self._record_cfg),
-            'record_dir': getattr(self._video_recorder, '_session_dir', '') if is_recording else '',
+            'record_dir': self._video_recorder.session_dir if is_recording else '',
         }
 
     # ── 懒加载属性 ────────────────────────────────
@@ -418,8 +421,9 @@ class DouyinBarrage:
         """_start_recording 的内部实现，调用方需持有 _recording_lock。"""
         if not self._record_cfg.get('enabled', False):
             return
-        if not self._room_info:
-            return
+        with self._room_info_lock:
+            if not self._room_info:
+                return
         if self._stop_event.is_set():
             return
         # 已经在录了就不重复启动
@@ -430,22 +434,27 @@ class DouyinBarrage:
 
         # 推流 URL 过期修复: ffmpeg 崩了说明 URL 可能已过期
         # 重试用旧的 _room_info 会一直失败 → 刷新一次拿新 URL
-        if self._room_info_stale:
+        with self._room_info_lock:
+            stale = self._room_info_stale
+        if stale:
             try:
                 new_info = self.query_room_api()
                 status = new_info.get('status')
                 if status != 2:
                     logger.info(f"[录制] API 状态非开播 (status={status})，跳过重试")
                     return
-                self._room_info = new_info
-                self._room_id = new_info['room_id']
-                self._room_info_stale = False
+                with self._room_info_lock:
+                    self._room_info = new_info
+                    self._room_id = new_info['room_id']
+                    self._room_info_stale = False
                 logger.info("[录制] 推流地址已刷新（ffmpeg 上次失败后重查 API）")
             except Exception as e:
                 logger.warning(f"[录制] 刷新 room_info 失败: {e}，用旧 URL 重试")
 
+        with self._room_info_lock:
+            room_info = dict(self._room_info) if self._room_info else {}
         stream_info = select_stream_url(
-            self._room_info,
+            room_info,
             quality_name=self._record_cfg.get('quality', '原画'),
             check_health=True,
         )
@@ -499,7 +508,8 @@ class DouyinBarrage:
             # 记录崩溃时间，下一次看门狗检查会据此施加 30s 背压
             self._last_recording_attempt = time.time()
             # 标记 room_info 过期，下次 _start_recording 会重新查 API 拿新 URL
-            self._room_info_stale = True
+            with self._room_info_lock:
+                self._room_info_stale = True
 
     def _stop_recording(self):
         """停止视频录制。"""
@@ -564,8 +574,9 @@ class DouyinBarrage:
                     try:
                         info = self.query_room_api()
                         if info['status'] == 2:
-                            self._room_id = info['room_id']
-                            self._room_info = info
+                            with self._room_info_lock:
+                                self._room_id = info['room_id']
+                                self._room_info = info
                             self._on_live_started(source='api')
                             return
                     except Exception as e:
@@ -665,10 +676,12 @@ class DouyinBarrage:
                 logger.info(f"[连接] 第 {self._reconnect_count + 1} 次连接")
 
                 # ── 状态感知（每次重新获取 room_id，主播重开播可能换 ID）──
-                self._room_id = None
+                with self._room_info_lock:
+                    self._room_id = None
                 info = self.query_room_api()
-                self._room_id = info['room_id']
-                self._room_info = info
+                with self._room_info_lock:
+                    self._room_id = info['room_id']
+                    self._room_info = info
 
                 # 立即更新日志前缀映射（不等 set_room_status）
                 anchor = info.get('anchor_name', '')
@@ -790,6 +803,7 @@ class DouyinBarrage:
                         ping_interval=0,
                         ping_timeout=10,
                         origin='https://live.douyin.com',
+                        timeout=self.WS_CONNECT_TIMEOUT,
                     )
                 finally:
                     pass
@@ -807,7 +821,7 @@ class DouyinBarrage:
                     logger.error(f"[房间] 直播间无效（live_id={self.live_id}），停止采集: {e}")
                     break
                 logger.error(f"[网络] API 异常: {e}")
-            except Exception as e:
+            except (OSError, websocket.WebSocketException) as e:
                 logger.error(f"[连接] WebSocket 异常: {e}")
 
             # ── 统一处理：已进入等待模式（消息处理器触发）──
@@ -875,7 +889,7 @@ class DouyinBarrage:
                             PushFrame(payload_type="hb")._pb.SerializeToString(),
                             websocket.ABNF.OPCODE_BINARY,
                         )
-            except Exception as e:
+            except (OSError, websocket.WebSocketException) as e:
                 logger.warning(f"[心跳] 心跳线程异常退出: {e}")
                 break
             conn_stop.wait(timeout=interval + random.uniform(0, 2))
@@ -986,11 +1000,14 @@ class DouyinBarrage:
 
     def _save_room_info(self):
         """保存主播信息和下载图片（meta.json 不存在时执行）。"""
-        if not self._room_info:
-            return
+        with self._room_info_lock:
+            if not self._room_info:
+                return
+            info_snapshot = dict(self._room_info)
+        anchor_name = self.anchor_name
 
         output_dir = self.config.get('output_dir', 'data')
-        room_dir = get_anchor_dir(output_dir, self.anchor_name, self.live_id)
+        room_dir = get_anchor_dir(output_dir, anchor_name, self.live_id)
         meta_file = os.path.join(room_dir, 'meta.json')
 
         if os.path.exists(meta_file):
@@ -1000,11 +1017,11 @@ class DouyinBarrage:
             os.makedirs(room_dir, exist_ok=True)
 
             # 过滤掉推流地址等敏感信息
-            safe_info = {k: v for k, v in self._room_info.items()
+            safe_info = {k: v for k, v in info_snapshot.items()
                          if k not in ('stream_url',)}
             meta = {
                 'live_id': self.live_id,
-                'anchor_name': self.anchor_name,
+                'anchor_name': anchor_name,
                 **safe_info,
                 'saved_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             }
@@ -1013,11 +1030,11 @@ class DouyinBarrage:
                 json.dump(meta, f, ensure_ascii=False, indent=2)
             logger.info(f"[数据] 主播信息已保存: {meta_file}")
 
-            if download_image(self.session, self._room_info.get('anchor_avatar', ''),
+            if download_image(self.session, info_snapshot.get('anchor_avatar', ''),
                               os.path.join(room_dir, 'avatar.jpg')):
                 logger.info(f"[数据] 主播头像已下载")
 
-            if download_image(self.session, self._room_info.get('room_cover', ''),
+            if download_image(self.session, info_snapshot.get('room_cover', ''),
                               os.path.join(room_dir, 'cover.jpg')):
                 logger.info(f"[数据] 直播间封面已下载")
         except Exception as e:
@@ -1111,16 +1128,13 @@ class DouyinBarrage:
 
         try:
             decompressed = gzip.decompress(package.payload)
-        except gzip.BadGzipFile as e:
+        except (gzip.BadGzipFile, OSError) as e:
             logger.warning(f"[连接] gzip 损坏，丢弃本帧（可能是丢包/乱序）: {e}")
-            return
-        except Exception as e:
-            logger.error(f"[连接] gzip 解压异常（非格式错误，需排查）: {e}")
             return
 
         try:
             response = parse_proto(Response, decompressed)
-        except Exception as e:
+        except (ValueError, KeyError, TypeError) as e:
             logger.warning(f"[数据] Response 解析失败: {e}")
             return
 
@@ -1133,7 +1147,7 @@ class DouyinBarrage:
                     payload=response.internal_ext.encode('utf-8'),
                 )._pb.SerializeToString()
                 ws.send(ack, websocket.ABNF.OPCODE_BINARY)
-            except Exception as e:
+            except (OSError, websocket.WebSocketException) as e:
                 logger.error(f"[连接] ACK 发送失败: {e}")
 
         # 消息分发

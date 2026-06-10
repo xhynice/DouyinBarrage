@@ -4,6 +4,11 @@
 控制台仅显示 WARNING/ERROR 和状态面板，INFO/DEBUG 仅写入文件。
 """
 
+__all__ = [
+    'RoomLogFilter', 'QueueHandler', 'ThroughputCounter', 'DataRecorder',
+    'setup_logger', 'get_room_statuses',
+]
+
 import csv
 import logging
 import logging.handlers
@@ -222,9 +227,12 @@ def setup_logger(log_dir='logs', log_level='INFO'):
             if isinstance(h, QueueHandler):
                 if not any(isinstance(f, RoomLogFilter) for f in h.filters):
                     h.addFilter(RoomLogFilter())
+                # 更新控制台级别：取已有级别和新级别的较小值（更详细）
                 for sh in h._handlers:
                     if isinstance(sh, logging.StreamHandler) and not isinstance(sh, logging.FileHandler):
-                        sh.setLevel(min(logging.WARNING, user_level))
+                        new_console_level = min(logging.WARNING, user_level)
+                        if new_console_level < sh.level:
+                            sh.setLevel(new_console_level)
                 return logger, h
         queue_handler = QueueHandler()
         queue_handler.addFilter(RoomLogFilter())
@@ -416,7 +424,7 @@ class DataRecorder:
         if not fields:
             return
         path = os.path.join(self._dir, f"{msg_type}.csv")
-        fp = open(path, 'w', newline='', encoding='utf-8')
+        fp = open(path, 'w', newline='', encoding='utf-8-sig')
         writer = csv.DictWriter(fp, fieldnames=fields)
         writer.writeheader()
         self._csv_fps[msg_type] = fp
@@ -618,8 +626,14 @@ class DataRecorder:
         if self._flush_thread and self._flush_thread.is_alive():
             self._flush_thread.join(timeout=5)
             if self._flush_thread.is_alive():
+                # 线程未退出，尝试同步刷新剩余数据
+                try:
+                    self._do_flush()
+                except Exception:
+                    pass
                 pending = sum(len(b) for b in self._sqlite_bufs.values()) + sum(len(b) for b in self._csv_bufs.values())
-                logger.warning(f"[数据] 刷新线程未在 5 秒内退出，{pending} 条数据可能未写入")
+                if pending > 0:
+                    logger.warning(f"[数据] 刷新线程未在 5 秒内退出，{pending} 条数据可能未写入")
         for fp in self._csv_fps.values():
             try:
                 fp.close()

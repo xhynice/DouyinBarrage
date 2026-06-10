@@ -7,6 +7,12 @@
     - build_websocket_url / build_ws_cookie: 构建 WebSocket 连接参数。
 """
 
+__all__ = [
+    'RoomNotFoundError', 'http_get_with_retry', 'build_http_headers',
+    'build_websocket_url', 'build_ws_cookie', 'resolve_live_id',
+    'fetch_ttwid', 'download_image', 'enter_room_api', 'fetch_webcast_cursor',
+]
+
 import json
 import logging
 import random

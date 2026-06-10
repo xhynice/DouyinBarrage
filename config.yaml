@@ -30,7 +30,7 @@ barrage:
 
 # ==================== 录制配置 ====================
 record:
-  enabled: false              # 录制开关（CLI --record 优先）
+  enabled: true               # 录制开关（CLI --record 优先）
   format: ts                  # 封装格式: ts / flv / mp4
   quality: 原画               # 画质: 原画 / 蓝光 / 超清 / 高清 / 标清（与抖音官方名一致）
   segment_time: 0             # 分段时长（秒）: 0=不分段，建议 3600（1小时）

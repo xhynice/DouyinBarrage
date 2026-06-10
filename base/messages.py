@@ -10,6 +10,15 @@
     辅助层    Kk / Rsp / RspF 等 — 逆向所得含义不明的加密字段
 """
 
+__all__ = [
+    'PushFrame', 'Response', 'Message', 'parse_proto',
+    'ChatMessage', 'GiftMessage', 'LikeMessage', 'MemberMessage',
+    'SocialMessage', 'RoomUserSeqMessage', 'FansclubMessage',
+    'ControlMessage', 'EmojiChatMessage', 'RoomStatsMessage',
+    'RoomMessage', 'RoomRankMessage', 'RoomStreamAdaptationMessage',
+    'User', 'Common', 'Image', 'Text',
+]
+
 import proto
 
 

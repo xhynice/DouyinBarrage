@@ -14,6 +14,8 @@
   - 标清 (level 1, sdk_key=ld)            → 最低
 """
 
+__all__ = ['select_stream_url']
+
 import logging
 
 import requests
