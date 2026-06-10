@@ -120,7 +120,6 @@ class DouyinRecorder:
         """构建保存路径（基础路径，不含分段序号）。"""
         fmt = self._record_cfg.get('format', 'ts')
         now = datetime.now()
-        ms = now.microsecond // 1000
         if not self._session_dir:
             ts = now.strftime('%Y%m%d_%H%M')
             self._session_dir = os.path.join(
@@ -128,8 +127,8 @@ class DouyinRecorder:
             os.makedirs(self._session_dir, exist_ok=True)
 
         dir_name = sanitize_dir_name(self.anchor_name) or self.live_id
-        ts_ms = now.strftime('%Y%m%d_%H%M') + f'_{ms:03d}'
-        filename = f"{dir_name}_{ts_ms}.{fmt}"
+        ts_str = now.strftime('%Y%m%d_%H%M')
+        filename = f"{dir_name}_{ts_str}.{fmt}"
         return os.path.join(self._session_dir, filename)
 
     def _start_ffmpeg(self):

@@ -396,8 +396,7 @@ class DataRecorder:
         if self._opened or not self._fmts:
             return
         now = datetime.now()
-        ms = now.microsecond // 1000
-        self._ts = now.strftime('%Y%m%d_%H%M') + f'_{ms:03d}'
+        self._ts = now.strftime('%Y%m%d_%H%M')
 
         # 房间级目录：主播名
         self._live_dir = get_anchor_dir(self._base_dir, self._anchor_name, self.live_id)
