@@ -14,7 +14,9 @@ __all__ = ['DouyinRecorder', 'check_ffmpeg']
 import glob
 import logging
 import os
+import shutil
 import subprocess
+import tempfile
 import threading
 import time
 from datetime import datetime
@@ -54,11 +56,13 @@ class DouyinRecorder:
     """
 
     def __init__(self, live_id, anchor_name='', on_failure=None,
-                 output_dir='data', session_dir=None):
+                 output_dir='data', session_dir=None, record_local=False):
         self.live_id = live_id
         self.anchor_name = anchor_name
         self._output_dir = output_dir
-        self._session_dir = session_dir or ''  # 外部传入的会话目录
+        self._session_dir = session_dir or ''  # 外部传入的会话目录（持久化）
+        self._record_local = record_local      # 先写本地再搬迁
+        self._work_dir = None                  # 本地临时目录
         self._process = None
         self._record_url = ''
         self._record_cfg = {}
@@ -125,12 +129,20 @@ class DouyinRecorder:
             ts = now.strftime('%Y%m%d_%H%M')
             self._session_dir = os.path.join(
                 get_anchor_dir(self._output_dir, self.anchor_name, self.live_id), ts)
+
+        # 录制文件写入位置：本地模式用 /tmp，否则直接写持久化目录
+        if self._record_local:
+            if not self._work_dir:
+                self._work_dir = tempfile.mkdtemp(prefix=f'douyin_rec_')
+            save_dir = self._work_dir
+        else:
             os.makedirs(self._session_dir, exist_ok=True)
+            save_dir = self._session_dir
 
         dir_name = sanitize_dir_name(self.anchor_name) or self.live_id
         ts_ms = now.strftime('%Y%m%d_%H%M') + f'_{ms:03d}'
         filename = f"{dir_name}_{ts_ms}.{fmt}"
-        return os.path.join(self._session_dir, filename)
+        return os.path.join(save_dir, filename)
 
     def _start_ffmpeg(self):
         """启动 ffmpeg 进程（支持分段录制）。
@@ -287,6 +299,10 @@ class DouyinRecorder:
             if self._monitor_thread is not threading.current_thread():
                 self._monitor_thread.join(timeout=15)
 
+        # 搬到持久化目录
+        if was_recording:
+            self._move_to_persistent()
+
         # 自动转码（即使 ffmpeg 已异常退出，只要有录制曾启动就执行）
         if was_recording and auto_convert:
             self._convert_ts_to_mp4()
@@ -350,6 +366,31 @@ class DouyinRecorder:
                             logger.warning(f"[ffmpeg] {line.rstrip()}")
         except Exception:
             pass
+
+    def _move_to_persistent(self):
+        """将录制文件从本地临时目录搬到持久化目录。"""
+        if not self._work_dir or not os.path.isdir(self._work_dir):
+            return
+        try:
+            os.makedirs(self._session_dir, exist_ok=True)
+            moved = 0
+            for name in os.listdir(self._work_dir):
+                src = os.path.join(self._work_dir, name)
+                dst = os.path.join(self._session_dir, name)
+                try:
+                    shutil.move(src, dst)
+                    moved += 1
+                except Exception as e:
+                    logger.warning(f"[录制] 搬迁失败 {name}: {e}")
+            try:
+                shutil.rmtree(self._work_dir, ignore_errors=True)
+            except Exception:
+                pass
+            self._work_dir = None
+            if moved:
+                logger.info(f"[录制] {moved} 个文件已搬到持久化目录")
+        except Exception as e:
+            logger.error(f"[录制] 搬迁异常，文件留在 {self._work_dir}: {e}")
 
     def _convert_ts_to_mp4(self):
         """将录制的 ts 文件自动转码为 mp4，转码成功后删除原 ts 文件。

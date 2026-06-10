@@ -463,6 +463,7 @@ class DouyinBarrage:
             return
 
         output_dir = self.config.get('output_dir', 'data')
+        record_local = self._record_cfg.get('record_local', False)
         # 使用弹幕数据的会话目录，让录制文件放在同一目录下
         session_dir = self._data_recorder.session_dir if self._data_recorder else None
         if self._video_recorder is None:
@@ -471,6 +472,7 @@ class DouyinBarrage:
                 on_failure=self._on_recorder_failure,
                 output_dir=output_dir,
                 session_dir=session_dir,
+                record_local=record_local,
             )
         self._video_recorder.anchor_name = self.anchor_name
         self._video_recorder.start(stream_info['record_url'], self._record_cfg)

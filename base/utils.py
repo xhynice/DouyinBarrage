@@ -431,6 +431,7 @@ DEFAULT_CONFIG = {
         'segment_time': 0,
         'segment_size': 0,
         'auto_convert': True,
+        'record_local': False,
     },
     'api': {
         'enabled': False,
