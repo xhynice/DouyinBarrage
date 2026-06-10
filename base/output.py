@@ -367,7 +367,7 @@ class DataRecorder:
             self._fmts.add('csv')
         if fmt_cfg.get('sqlite', False):
             self._fmts.add('sqlite')
-        self._sqlite_local = fmt_cfg.get('sqlite_local', False)  # SQLite 先写本地再搬迁
+        self._local_first = fmt_cfg.get('local_first', False)  # SQLite 先写本地再搬迁
         self._enable_outputs = output_cfg
         self._base_dir = config.get('output_dir', os.path.join(SCRIPT_DIR, 'data'))
         self._dir = self._base_dir                # 最终会话目录，open() 中更新
@@ -394,7 +394,7 @@ class DataRecorder:
     def open(self):
         """初始化记录器，创建输出目录。
 
-        sqlite_local 模式：SQLite 先写本地 /tmp，close() 时搬到持久化目录。
+        local_first 模式：SQLite 先写本地 /tmp，close() 时搬到持久化目录。
         适用于 Bucket/FUSE 等不支持 mmap/flock 的网络文件系统。
         本地部署时关闭此选项，SQLite 直接写持久化目录。
         """
@@ -413,7 +413,7 @@ class DataRecorder:
 
         # SQLite 写入位置：本地模式用 /tmp，否则直接写持久化目录
         if 'sqlite' in self._fmts:
-            if self._sqlite_local:
+            if self._local_first:
                 self._work_dir = tempfile.mkdtemp(prefix=f'douyin_{self._ts}_')
             self._open_db()
 
@@ -443,7 +443,7 @@ class DataRecorder:
         """打开会话级 SQLite 数据库，建表。
 
         命名格式与录制文件一致：{主播名}_{YYYYMMDD_HHMM}_{毫秒}.db
-        sqlite_local 模式下写入 /tmp，否则直接写持久化目录。
+        local_first 模式下写入 /tmp，否则直接写持久化目录。
         """
         dir_name = sanitize_dir_name(self._anchor_name) or self.live_id
         db_name = f"{dir_name}_{self._ts}.db"

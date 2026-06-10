@@ -463,7 +463,8 @@ class DouyinBarrage:
             return
 
         output_dir = self.config.get('output_dir', 'data')
-        record_local = self._record_cfg.get('record_local', False)
+        barrage_cfg = self.config.get('barrage', {})
+        record_local = barrage_cfg.get('local_first', False)
         # 使用弹幕数据的会话目录，让录制文件放在同一目录下
         session_dir = self._data_recorder.session_dir if self._data_recorder else None
         if self._video_recorder is None:
