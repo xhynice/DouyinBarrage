@@ -17,6 +17,7 @@ import sqlite3
 import threading
 import time
 from collections import deque
+from datetime import datetime
 
 from base.utils import SCRIPT_DIR, sanitize_dir_name, get_anchor_dir
 class RoomLogFilter(logging.Filter):
@@ -390,11 +391,13 @@ class DataRecorder:
         """初始化记录器，创建输出目录。
 
         目录结构：data/{主播名}/{yyyy-MM-dd_HH-mm-ss}/
-        SQLite 数据库位于主播目录下，跨会话追加。
+        SQLite 数据库与录制文件同级，命名格式一致。
         """
         if self._opened or not self._fmts:
             return
-        self._ts = time.strftime('%Y%m%d_%H%M')
+        now = datetime.now()
+        ms = now.microsecond // 1000
+        self._ts = now.strftime('%Y%m%d_%H%M') + f'_{ms:03d}'
 
         # 房间级目录：主播名
         self._live_dir = get_anchor_dir(self._base_dir, self._anchor_name, self.live_id)
@@ -429,12 +432,15 @@ class DataRecorder:
     # ── SQLite ────────────────────────────────────
 
     def _open_db(self):
-        """打开房间级 SQLite 数据库，建表。
+        """打开会话级 SQLite 数据库，建表。
 
+        命名格式与录制文件一致：{主播名}_{YYYYMMDD_HHMM}_{毫秒}.db
         WAL 模式允许读写并发，synchronous=NORMAL 在 WAL 下仍保证数据安全。
         cache_size=-8000 给予 8MB 页缓存，减少磁盘 I/O。
         """
-        db_path = os.path.join(self._dir, 'data.db')
+        dir_name = sanitize_dir_name(self._anchor_name) or self.live_id
+        db_name = f"{dir_name}_{self._ts}.db"
+        db_path = os.path.join(self._dir, db_name)
         self._db = sqlite3.connect(db_path, check_same_thread=False)
         self._db.execute('PRAGMA journal_mode=WAL')
         self._db.execute('PRAGMA synchronous=NORMAL')
