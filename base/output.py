@@ -13,7 +13,9 @@ import csv
 import logging
 import logging.handlers
 import os
+import shutil
 import sqlite3
+import tempfile
 import threading
 import time
 from collections import deque
@@ -367,8 +369,9 @@ class DataRecorder:
             self._fmts.add('sqlite')
         self._enable_outputs = output_cfg
         self._base_dir = config.get('output_dir', os.path.join(SCRIPT_DIR, 'data'))
-        self._dir = self._base_dir                # CSV 会话目录，open() 中更新
-        self._live_dir = None                     # SQLite 房间目录，open() 中设置
+        self._dir = self._base_dir                # 最终会话目录，open() 中更新
+        self._work_dir = None                     # 本地临时工作目录
+        self._live_dir = None                     # 房间目录，open() 中设置
 
         self._csv_bufs = {}
         self._csv_writers = {}
@@ -384,14 +387,15 @@ class DataRecorder:
 
     @property
     def session_dir(self):
-        """当前 CSV 会话目录（open() 后可用）。"""
+        """当前会话目录（录制文件写入此处）。"""
         return self._dir
 
     def open(self):
         """初始化记录器，创建输出目录。
 
-        目录结构：data/{主播名}/{yyyy-MM-dd_HH-mm-ss}/
-        SQLite 数据库与录制文件同级，命名格式一致。
+        SQLite 写入策略：先写本地临时目录（/tmp），close() 时搬到持久化目录。
+        避免 WAL 模式在网络文件系统（Bucket/FUSE）上出现 mmap/flock 兼容性问题。
+        CSV 直接写持久化目录（纯顺序追加，无锁依赖）。
         """
         if self._opened or not self._fmts:
             return
@@ -402,11 +406,13 @@ class DataRecorder:
         # 房间级目录：主播名
         self._live_dir = get_anchor_dir(self._base_dir, self._anchor_name, self.live_id)
 
-        # 会话级目录（CSV 和 SQLite 都需要，与录制文件同级）
+        # 会话级目录（CSV 直接写这里，录制文件也在这里）
         self._dir = os.path.join(self._live_dir, self._ts)
         os.makedirs(self._dir, exist_ok=True)
 
+        # SQLite 本地临时工作目录（close() 时搬到 self._dir）
         if 'sqlite' in self._fmts:
+            self._work_dir = tempfile.mkdtemp(prefix=f'douyin_{self._ts}_')
             self._open_db()
 
         self._flush_thread = threading.Thread(target=self._bg_flush_loop, daemon=True, name='recorder-flush')
@@ -440,7 +446,7 @@ class DataRecorder:
         """
         dir_name = sanitize_dir_name(self._anchor_name) or self.live_id
         db_name = f"{dir_name}_{self._ts}.db"
-        db_path = os.path.join(self._dir, db_name)
+        db_path = os.path.join(self._work_dir, db_name)
         self._db = sqlite3.connect(db_path, check_same_thread=False)
         self._db.execute('PRAGMA journal_mode=WAL')
         self._db.execute('PRAGMA synchronous=NORMAL')
@@ -620,7 +626,7 @@ class DataRecorder:
                 logger.warning(f"[数据] CSV 写入异常，{len(batch) - failed_idx} 条数据已回退")
 
     def close(self):
-        """停止后台线程，刷新剩余数据，关闭所有句柄。"""
+        """停止后台线程，刷新剩余数据，关闭句柄，搬到持久化目录。"""
         if not self._opened:
             return
         self._stop.set()
@@ -648,4 +654,33 @@ class DataRecorder:
                 pass
             self._db = None
         self._opened = False
-        logger.info("[数据] 记录器已关闭")
+
+        # 搬到持久化目录
+        self._move_to_persistent()
+
+    def _move_to_persistent(self):
+        """将 SQLite 文件从本地临时目录搬到持久化目录。"""
+        if not self._work_dir or not os.path.isdir(self._work_dir):
+            return
+        try:
+            os.makedirs(self._dir, exist_ok=True)
+            moved = 0
+            for name in os.listdir(self._work_dir):
+                if not name.endswith(('.db', '.db-shm', '.db-wal')):
+                    continue
+                src = os.path.join(self._work_dir, name)
+                dst = os.path.join(self._dir, name)
+                try:
+                    shutil.move(src, dst)
+                    moved += 1
+                except Exception as e:
+                    logger.warning(f"[数据] SQLite 搬迁失败 {name}: {e}")
+            # 清理临时目录
+            try:
+                shutil.rmtree(self._work_dir, ignore_errors=True)
+            except Exception:
+                pass
+            if moved:
+                logger.info(f"[数据] SQLite 已搬到持久化目录: {self._dir}")
+        except Exception as e:
+            logger.error(f"[数据] SQLite 搬迁异常，数据留在 {self._work_dir}: {e}")
