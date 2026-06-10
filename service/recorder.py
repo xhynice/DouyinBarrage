@@ -66,6 +66,8 @@ class DouyinRecorder:
         self._recording_active = False  # 录制是否曾启动（stop()时仍需清理）
         self._start_time = 0.0
         self._on_failure = on_failure
+        self._ffmpeg_log_fp = None
+        self._ffmpeg_log_path = ''
 
     @property
     def is_recording(self):
@@ -145,7 +147,7 @@ class DouyinRecorder:
 
         cmd = [
             'ffmpeg', '-y',
-            '-v', 'quiet',
+            '-v', 'error',
             '-hide_banner',
             '-user_agent', user_agent,
             '-protocol_whitelist', 'rtmp,crypto,file,http,https,tcp,tls,udp,rtp,httpproxy',
@@ -207,9 +209,15 @@ class DouyinRecorder:
             logger.info(f"[录制] 分段大小: {segment_size}MB")
 
         try:
+            # stderr 写入日志文件，方便排查 ffmpeg 错误
+            log_dir = os.path.join(self._session_dir or self._output_dir, 'logs')
+            os.makedirs(log_dir, exist_ok=True)
+            ffmpeg_log = os.path.join(log_dir, f'ffmpeg_{os.getpid()}.log')
+            self._ffmpeg_log_path = ffmpeg_log
+            self._ffmpeg_log_fp = open(ffmpeg_log, 'w', encoding='utf-8')
             self._process = subprocess.Popen(
                 cmd, stdin=subprocess.PIPE,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL, stderr=self._ffmpeg_log_fp,
             )
             self._start_time = time.time()
             return True
@@ -296,6 +304,8 @@ class DouyinRecorder:
                         logger.info(f"[录制] {self.display_name} 进程退出 (code=255)")
                     else:
                         logger.warning(f"[录制] {self.display_name} 进程异常退出 (code={return_code})")
+                        # 读取 ffmpeg 错误日志
+                        self._close_ffmpeg_log()
                     if self._on_failure:
                         try:
                             self._on_failure(return_code)
@@ -308,6 +318,26 @@ class DouyinRecorder:
             target=loop, daemon=True, name=f'rec-monitor-{self.live_id}'
         )
         self._monitor_thread.start()
+
+    def _close_ffmpeg_log(self):
+        """关闭 ffmpeg 日志文件，读取并输出最后几行错误。"""
+        try:
+            if self._ffmpeg_log_fp:
+                self._ffmpeg_log_fp.close()
+                self._ffmpeg_log_fp = None
+        except Exception:
+            pass
+        # 读取日志最后 10 行
+        try:
+            if hasattr(self, '_ffmpeg_log_path') and os.path.exists(self._ffmpeg_log_path):
+                with open(self._ffmpeg_log_path, 'r', encoding='utf-8', errors='replace') as f:
+                    lines = f.readlines()
+                    if lines:
+                        last_lines = lines[-10:]
+                        for line in last_lines:
+                            logger.warning(f"[ffmpeg] {line.rstrip()}")
+        except Exception:
+            pass
 
     def _convert_ts_to_mp4(self):
         """将录制的 ts 文件自动转码为 mp4，转码成功后删除原 ts 文件。
