@@ -422,7 +422,7 @@ DEFAULT_CONFIG = {
         'control': True,
     },
     'barrage': {
-        'csv': True, 'sqlite': False, 'local_first': False,
+        'csv': True, 'sqlite': False,
     },
     'record': {
         'enabled': False,

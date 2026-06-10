@@ -13,9 +13,7 @@ import csv
 import logging
 import logging.handlers
 import os
-import shutil
 import sqlite3
-import tempfile
 import threading
 import time
 from collections import deque
@@ -367,19 +365,17 @@ class DataRecorder:
             self._fmts.add('csv')
         if fmt_cfg.get('sqlite', False):
             self._fmts.add('sqlite')
-        self._local_first = fmt_cfg.get('local_first', False)  # SQLite 先写本地再搬迁
         self._enable_outputs = output_cfg
         self._base_dir = config.get('output_dir', os.path.join(SCRIPT_DIR, 'data'))
-        self._dir = self._base_dir                # 最终会话目录，open() 中更新
-        self._work_dir = None                     # SQLite 本地临时工作目录
-        self._live_dir = None                     # 房间目录，open() 中设置
+        self._dir = self._base_dir
+        self._live_dir = None
 
         self._csv_bufs = {}
         self._csv_writers = {}
         self._csv_fps = {}
         self._db = None
         self._sqlite_bufs = {}
-        self._sqlite_stmts = {}      # {msg_type: sql} prepared statement 缓存
+        self._sqlite_stmts = {}
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._flush_thread = None
@@ -392,30 +388,18 @@ class DataRecorder:
         return self._dir
 
     def open(self):
-        """初始化记录器，创建输出目录。
-
-        local_first 模式：SQLite 先写本地 /tmp，close() 时搬到持久化目录。
-        适用于 Bucket/FUSE 等不支持 mmap/flock 的网络文件系统。
-        本地部署时关闭此选项，SQLite 直接写持久化目录。
-        启动时自动回收上次未搬迁的孤儿文件。
-        """
+        """初始化记录器，创建输出目录。"""
         if self._opened or not self._fmts:
             return
 
         now = datetime.now()
         self._ts = now.strftime('%Y%m%d_%H%M')
 
-        # 房间级目录：主播名
         self._live_dir = get_anchor_dir(self._base_dir, self._anchor_name, self.live_id)
-
-        # 会话级目录
         self._dir = os.path.join(self._live_dir, self._ts)
         os.makedirs(self._dir, exist_ok=True)
 
-        # SQLite 写入位置：本地模式用 /tmp，否则直接写持久化目录
         if 'sqlite' in self._fmts:
-            if self._local_first:
-                self._work_dir = tempfile.mkdtemp(prefix=f'douyin_{self._ts}_')
             self._open_db()
 
         self._flush_thread = threading.Thread(target=self._bg_flush_loop, daemon=True, name='recorder-flush')
@@ -441,15 +425,10 @@ class DataRecorder:
     # ── SQLite ────────────────────────────────────
 
     def _open_db(self):
-        """打开会话级 SQLite 数据库，建表。
-
-        命名格式与录制文件一致：{主播名}_{YYYYMMDD_HHMM}_{毫秒}.db
-        local_first 模式下写入 /tmp，否则直接写持久化目录。
-        """
+        """打开会话级 SQLite 数据库，建表。"""
         dir_name = sanitize_dir_name(self._anchor_name) or self.live_id
         db_name = f"{dir_name}_{self._ts}.db"
-        db_dir = self._work_dir if self._work_dir else self._dir
-        db_path = os.path.join(db_dir, db_name)
+        db_path = os.path.join(self._dir, db_name)
         self._db = sqlite3.connect(db_path, check_same_thread=False)
         self._db.execute('PRAGMA journal_mode=WAL')
         self._db.execute('PRAGMA synchronous=NORMAL')
@@ -629,14 +608,13 @@ class DataRecorder:
                 logger.warning(f"[数据] CSV 写入异常，{len(batch) - failed_idx} 条数据已回退")
 
     def close(self):
-        """停止后台线程，刷新剩余数据，关闭句柄，搬到持久化目录。"""
+        """停止后台线程，刷新剩余数据，关闭所有句柄。"""
         if not self._opened:
             return
         self._stop.set()
         if self._flush_thread and self._flush_thread.is_alive():
             self._flush_thread.join(timeout=5)
             if self._flush_thread.is_alive():
-                # 线程未退出，尝试同步刷新剩余数据
                 try:
                     self._do_flush()
                 except Exception:
@@ -657,40 +635,7 @@ class DataRecorder:
                 pass
             self._db = None
         self._opened = False
-
-        # 搬到持久化目录
-        self._move_to_persistent()
-
-    def _move_to_persistent(self):
-        """将 SQLite 文件从本地临时目录搬到持久化目录。"""
-        if not self._work_dir or not os.path.isdir(self._work_dir):
-            return
-        self._do_move(self._work_dir, self._dir)
-        self._work_dir = None
-
-    def _do_move(self, src_dir, dst_dir):
-        """将 .db/.db-shm/.db-wal 从 src_dir 搬到 dst_dir。"""
-        try:
-            os.makedirs(dst_dir, exist_ok=True)
-            moved = 0
-            for name in os.listdir(src_dir):
-                if not name.endswith(('.db', '.db-shm', '.db-wal')):
-                    continue
-                src = os.path.join(src_dir, name)
-                dst = os.path.join(dst_dir, name)
-                try:
-                    shutil.move(src, dst)
-                    moved += 1
-                except Exception as e:
-                    logger.warning(f"[数据] 搬迁失败 {name}: {e}")
-            try:
-                shutil.rmtree(src_dir, ignore_errors=True)
-            except Exception:
-                pass
-            if moved:
-                logger.info(f"[数据] SQLite 已搬到持久化目录: {dst_dir}")
-        except Exception as e:
-            logger.error(f"[数据] 搬迁异常，数据留在 {src_dir}: {e}")
+        logger.info("[数据] 记录器已关闭")
 
     @staticmethod
     def _recover_orphans():
