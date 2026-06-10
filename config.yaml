@@ -27,7 +27,7 @@ output:
 barrage:
   csv: true                   # CSV 输出（UTF-8 BOM，Excel 直接打开）
   sqlite: true                # SQLite 输出（WAL 模式）
-  local_first: true           # SQLite 和录制先写本地 /tmp 再搬迁（Bucket/FUSE 挂载时开启，本地部署关闭）
+  local_first: false          # SQLite 和录制先写本地 /tmp 再搬迁（Bucket/FUSE 挂载时开启，本地部署关闭）
 
 # ==================== 录制配置 ====================
 record:
