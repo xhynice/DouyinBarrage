@@ -797,16 +797,19 @@ class DouyinBarrage:
 
                 # socket 超时已在模块初始化时通过 setdefaulttimeout(30) 全局设置
                 # run_forever 内部每次重连都会读取 getdefaulttimeout()
+                # 临时设置全局 socket 超时（websocket-client 1.x 不支持 run_forever timeout 参数）
+                import socket as _socket
+                _old_timeout = _socket.getdefaulttimeout()
+                _socket.setdefaulttimeout(self.WS_CONNECT_TIMEOUT)
                 try:
                     self.ws.run_forever(
                         sockopt=((SOL_SOCKET, SO_RCVBUF, (self.RCVBUF_KB * 1024)),),
                         ping_interval=0,
                         ping_timeout=10,
                         origin='https://live.douyin.com',
-                        timeout=self.WS_CONNECT_TIMEOUT,
                     )
                 finally:
-                    pass
+                    _socket.setdefaulttimeout(_old_timeout)
 
             except RuntimeError as e:
                 logger.error(f"[连接] WebSocket 不可恢复错误，停止采集: {e}")

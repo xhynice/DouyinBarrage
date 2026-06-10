@@ -26,7 +26,7 @@ output:
 # ==================== 弹幕输出 ====================
 barrage:
   csv: true                   # CSV 输出（UTF-8 BOM，Excel 直接打开）
-  sqlite: false               # SQLite 输出（WAL 模式，跨会话追加）
+  sqlite: true                # SQLite 输出（WAL 模式，每会话独立）
 
 # ==================== 录制配置 ====================
 record:
