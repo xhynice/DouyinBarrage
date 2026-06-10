@@ -316,7 +316,7 @@ class DataRecorder:
 
     生命周期：构造 → open() → record() × N → close()
     CSV 文件延迟创建：首次收到某类型数据时才创建文件并写入表头。
-    SQLite 数据库位于主播目录（data/{主播名}/data.db），跨会话追加。
+    SQLite 数据库位于会话目录（data/{主播名}/{会话}/data.db），与录制文件同级。
     SQLite 的 time 字段存为 Unix 秒级时间戳（INTEGER），用于视频+弹幕同步。
     后台线程每 2s 刷新一次缓冲区（deque 10 万上限，溢出丢弃）。
 
@@ -399,14 +399,9 @@ class DataRecorder:
         # 房间级目录：主播名
         self._live_dir = get_anchor_dir(self._base_dir, self._anchor_name, self.live_id)
 
-        # 会话级目录
-        needs_session_dir = 'csv' in self._fmts
-        if needs_session_dir:
-            self._dir = os.path.join(self._live_dir, self._ts)
-            os.makedirs(self._dir, exist_ok=True)
-        else:
-            self._dir = self._live_dir
-            os.makedirs(self._dir, exist_ok=True)
+        # 会话级目录（CSV 和 SQLite 都需要，与录制文件同级）
+        self._dir = os.path.join(self._live_dir, self._ts)
+        os.makedirs(self._dir, exist_ok=True)
 
         if 'sqlite' in self._fmts:
             self._open_db()
@@ -439,7 +434,7 @@ class DataRecorder:
         WAL 模式允许读写并发，synchronous=NORMAL 在 WAL 下仍保证数据安全。
         cache_size=-8000 给予 8MB 页缓存，减少磁盘 I/O。
         """
-        db_path = os.path.join(self._live_dir, 'data.db')
+        db_path = os.path.join(self._dir, 'data.db')
         self._db = sqlite3.connect(db_path, check_same_thread=False)
         self._db.execute('PRAGMA journal_mode=WAL')
         self._db.execute('PRAGMA synchronous=NORMAL')
