@@ -153,7 +153,7 @@ class DouyinRecorder:
             '-analyzeduration', '20000000',
             '-probesize', '10000000',
             '-fflags', '+discardcorrupt',
-            '-re', '-i', self._record_url,
+            '-i', self._record_url,
             '-bufsize', '8000k',
             '-sn', '-dn',
             '-reconnect_delay_max', '60',
