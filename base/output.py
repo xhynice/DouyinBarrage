@@ -397,9 +397,11 @@ class DataRecorder:
         local_first 模式：SQLite 先写本地 /tmp，close() 时搬到持久化目录。
         适用于 Bucket/FUSE 等不支持 mmap/flock 的网络文件系统。
         本地部署时关闭此选项，SQLite 直接写持久化目录。
+        启动时自动回收上次未搬迁的孤儿文件。
         """
         if self._opened or not self._fmts:
             return
+
         now = datetime.now()
         self._ts = now.strftime('%Y%m%d_%H%M')
 
@@ -663,25 +665,63 @@ class DataRecorder:
         """将 SQLite 文件从本地临时目录搬到持久化目录。"""
         if not self._work_dir or not os.path.isdir(self._work_dir):
             return
+        self._do_move(self._work_dir, self._dir)
+        self._work_dir = None
+
+    def _do_move(self, src_dir, dst_dir):
+        """将 .db/.db-shm/.db-wal 从 src_dir 搬到 dst_dir。"""
         try:
-            os.makedirs(self._dir, exist_ok=True)
+            os.makedirs(dst_dir, exist_ok=True)
             moved = 0
-            for name in os.listdir(self._work_dir):
+            for name in os.listdir(src_dir):
                 if not name.endswith(('.db', '.db-shm', '.db-wal')):
                     continue
-                src = os.path.join(self._work_dir, name)
-                dst = os.path.join(self._dir, name)
+                src = os.path.join(src_dir, name)
+                dst = os.path.join(dst_dir, name)
                 try:
                     shutil.move(src, dst)
                     moved += 1
                 except Exception as e:
-                    logger.warning(f"[数据] SQLite 搬迁失败 {name}: {e}")
-            # 清理临时目录
+                    logger.warning(f"[数据] 搬迁失败 {name}: {e}")
             try:
-                shutil.rmtree(self._work_dir, ignore_errors=True)
+                shutil.rmtree(src_dir, ignore_errors=True)
             except Exception:
                 pass
             if moved:
-                logger.info(f"[数据] SQLite 已搬到持久化目录: {self._dir}")
+                logger.info(f"[数据] SQLite 已搬到持久化目录: {dst_dir}")
         except Exception as e:
-            logger.error(f"[数据] SQLite 搬迁异常，数据留在 {self._work_dir}: {e}")
+            logger.error(f"[数据] 搬迁异常，数据留在 {src_dir}: {e}")
+
+    @staticmethod
+    def _recover_orphans():
+        """启动时回收上次未搬迁的孤儿 /tmp 文件。"""
+        import glob as _glob
+        for d in _glob.glob(os.path.join(tempfile.gettempdir(), 'douyin_*')):
+            if not os.path.isdir(d):
+                continue
+            db_files = [f for f in os.listdir(d) if f.endswith('.db')]
+            if not db_files:
+                continue
+            for db_name in db_files:
+                try:
+                    base = db_name.rsplit('.db', 1)[0]
+                    parts = base.rsplit('_', 2)
+                    if len(parts) >= 3:
+                        ts = f"{parts[-2]}_{parts[-1]}"
+                        anchor = '_'.join(parts[:-2])
+                        dst_dir = os.path.join('data', anchor, ts)
+                        if os.path.isdir(dst_dir):
+                            logger.info(f"[数据] 回收孤儿文件: {d} → {dst_dir}")
+                            for f in os.listdir(d):
+                                if f.endswith(('.db', '.db-shm', '.db-wal')):
+                                    try:
+                                        shutil.move(os.path.join(d, f), os.path.join(dst_dir, f))
+                                    except Exception:
+                                        pass
+                            try:
+                                shutil.rmtree(d, ignore_errors=True)
+                            except Exception:
+                                pass
+                        break
+                except Exception:
+                    continue
