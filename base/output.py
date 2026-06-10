@@ -367,10 +367,11 @@ class DataRecorder:
             self._fmts.add('csv')
         if fmt_cfg.get('sqlite', False):
             self._fmts.add('sqlite')
+        self._sqlite_local = fmt_cfg.get('sqlite_local', False)  # SQLite 先写本地再搬迁
         self._enable_outputs = output_cfg
         self._base_dir = config.get('output_dir', os.path.join(SCRIPT_DIR, 'data'))
         self._dir = self._base_dir                # 最终会话目录，open() 中更新
-        self._work_dir = None                     # 本地临时工作目录
+        self._work_dir = None                     # SQLite 本地临时工作目录
         self._live_dir = None                     # 房间目录，open() 中设置
 
         self._csv_bufs = {}
@@ -393,9 +394,9 @@ class DataRecorder:
     def open(self):
         """初始化记录器，创建输出目录。
 
-        SQLite 写入策略：先写本地临时目录（/tmp），close() 时搬到持久化目录。
-        避免 WAL 模式在网络文件系统（Bucket/FUSE）上出现 mmap/flock 兼容性问题。
-        CSV 直接写持久化目录（纯顺序追加，无锁依赖）。
+        sqlite_local 模式：SQLite 先写本地 /tmp，close() 时搬到持久化目录。
+        适用于 Bucket/FUSE 等不支持 mmap/flock 的网络文件系统。
+        本地部署时关闭此选项，SQLite 直接写持久化目录。
         """
         if self._opened or not self._fmts:
             return
@@ -406,13 +407,14 @@ class DataRecorder:
         # 房间级目录：主播名
         self._live_dir = get_anchor_dir(self._base_dir, self._anchor_name, self.live_id)
 
-        # 会话级目录（CSV 直接写这里，录制文件也在这里）
+        # 会话级目录
         self._dir = os.path.join(self._live_dir, self._ts)
         os.makedirs(self._dir, exist_ok=True)
 
-        # SQLite 本地临时工作目录（close() 时搬到 self._dir）
+        # SQLite 写入位置：本地模式用 /tmp，否则直接写持久化目录
         if 'sqlite' in self._fmts:
-            self._work_dir = tempfile.mkdtemp(prefix=f'douyin_{self._ts}_')
+            if self._sqlite_local:
+                self._work_dir = tempfile.mkdtemp(prefix=f'douyin_{self._ts}_')
             self._open_db()
 
         self._flush_thread = threading.Thread(target=self._bg_flush_loop, daemon=True, name='recorder-flush')
@@ -441,12 +443,12 @@ class DataRecorder:
         """打开会话级 SQLite 数据库，建表。
 
         命名格式与录制文件一致：{主播名}_{YYYYMMDD_HHMM}_{毫秒}.db
-        WAL 模式允许读写并发，synchronous=NORMAL 在 WAL 下仍保证数据安全。
-        cache_size=-8000 给予 8MB 页缓存，减少磁盘 I/O。
+        sqlite_local 模式下写入 /tmp，否则直接写持久化目录。
         """
         dir_name = sanitize_dir_name(self._anchor_name) or self.live_id
         db_name = f"{dir_name}_{self._ts}.db"
-        db_path = os.path.join(self._work_dir, db_name)
+        db_dir = self._work_dir if self._work_dir else self._dir
+        db_path = os.path.join(db_dir, db_name)
         self._db = sqlite3.connect(db_path, check_same_thread=False)
         self._db.execute('PRAGMA journal_mode=WAL')
         self._db.execute('PRAGMA synchronous=NORMAL')
