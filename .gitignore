@@ -35,3 +35,10 @@ docs/data/
 logs/
 *.db
 test_*.py
+
+# ── local scaffolding added during timeline-sync work (not part of the feature) ──
+*.log
+run.sh
+run_*.sh
+probe_net.py
+rooms.all.txt
