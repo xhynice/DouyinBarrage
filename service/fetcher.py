@@ -351,9 +351,19 @@ class DouyinBarrage:
             if t and t.is_alive():
                 t.join(timeout=3)
         logger.info(f"[统计] 最终: {self._counter.report()}")
+        session_dir = self._data_recorder.session_dir if self._data_recorder else None
         if self._data_recorder:
             self._data_recorder.close()
         self._stop_recording()
+        # 会话结束：自动把弹幕/点赞/关注/统计对齐到视频时间轴（record 关闭时无 timing 文件，自动跳过）
+        if session_dir:
+            try:
+                from align import tag_all
+                results = tag_all(session_dir, log=logger.info)
+                if results:
+                    logger.info(f"[对齐] 完成，已生成 *_aligned.csv（{len(results)} 类）")
+            except Exception as e:
+                logger.warning(f"[对齐] 自动对齐失败（不影响数据）：{e}")
         # 多实例共享 QueueHandler，不在此处关闭（由进程退出统一清理）
         # 单实例模式下 stop() 后进程通常也退出，无需显式关闭
 
