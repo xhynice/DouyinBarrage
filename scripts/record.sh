@@ -39,6 +39,7 @@ while [ $# -gt 0 ]; do
     --direct)    NET="direct"; shift;;
     --no-record) RECORD=0; shift;;
     --log-level) LOGLEVEL="$2"; shift 2;;
+    --all)       shift;;   # no-op: all-rooms is the default (accepted for convenience)
     --)          shift; EXTRA=("$@"); break;;
     *) echo "unknown arg: $1  (see header for usage)" >&2; exit 2;;
   esac
