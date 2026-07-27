@@ -36,9 +36,8 @@ logs/
 *.db
 test_*.py
 
-# ── local scaffolding added during timeline-sync work (not part of the feature) ──
+# ── local scaffolding / run artifacts (not part of the feature) ──
 *.log
-run.sh
-run_*.sh
-probe_net.py
+runs/
+scripts/probe_net.py
 rooms.all.txt

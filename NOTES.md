@@ -44,7 +44,23 @@ git push fork feat/timeline-sidecar
 
 The changes also live in `patches/timeline-sidecar.patch` (re-appliable with `git apply`).
 
+## Running
+
+One parameterized wrapper handles env setup (ffmpeg PATH, venv, proxy toggle),
+optional scheduled start, and a timed graceful stop:
+
+```bash
+scripts/record.sh                            # run until Ctrl-C (all rooms, record, direct)
+scripts/record.sh --minutes 10               # 10-min timed run
+scripts/record.sh --minutes 120 --at 18:30   # wait until 18:30, then run 2h
+scripts/record.sh --minutes 5 --room <id>    # single room
+# flags: --minutes N | --at HH:MM | --room ID | --direct|--proxy | --no-record | --log-level L
+```
+
+Wrapper logs go to `runs/<timestamp>.log` (gitignored). App data still lands in `data/`.
+
 ## Not committed (local only)
 
-`config.yaml` (quality/direct settings), `rooms.txt` (room list), `run_*.sh`, `probe_net.py`,
-`.venv/`, `data/`, `*.log` — environment/config, not part of the feature.
+`config.yaml` (quality/direct settings), `rooms.txt` (room list), `scripts/probe_net.py`
+(bandwidth probe), `rooms.all.txt`, `runs/`, `.venv/`, `data/`, `*.log` — environment/config,
+not part of the feature.
