@@ -70,6 +70,10 @@ class DouyinRecorder:
         self._on_failure = on_failure
         self._ffmpeg_log_fp = None
         self._ffmpeg_log_path = ''
+        # 时间轴 sidecar：记录 wall-clock ↔ 视频 out_time 映射
+        self._timing_fp = None
+        self._timing_path = ''
+        self._progress_thread = None
 
     @property
     def is_recording(self):
@@ -156,6 +160,8 @@ class DouyinRecorder:
             'ffmpeg', '-y',
             '-v', 'error',
             '-hide_banner',
+            '-progress', 'pipe:1',      # 机器可读进度输出到 stdout（供时间轴 sidecar 采样）
+            '-stats_period', '1',       # 每秒一个进度块
             '-user_agent', user_agent,
             '-protocol_whitelist', 'rtmp,crypto,file,http,https,tcp,tls,udp,rtp,httpproxy',
             '-thread_queue_size', '1024',
@@ -227,11 +233,27 @@ class DouyinRecorder:
             ffmpeg_log = os.path.join(log_dir, f'ffmpeg_{os.getpid()}.log')
             self._ffmpeg_log_path = ffmpeg_log
             self._ffmpeg_log_fp = open(ffmpeg_log, 'w', encoding='utf-8')
+
+            # 打开时间轴 sidecar（追加模式，一个会话贯穿所有分段/重连产生的文件）
+            name = sanitize_dir_name(self.anchor_name) or self.live_id
+            self._timing_path = os.path.join(self._session_dir, f'timing_{name}.csv')
+            _new_timing = not os.path.exists(self._timing_path)
+            self._timing_fp = open(self._timing_path, 'a', encoding='utf-8', buffering=1)
+            if _new_timing:
+                self._timing_fp.write('wall_epoch,wall_iso,segment_file,video_pts_s\n')
+
             self._process = subprocess.Popen(
                 cmd, stdin=subprocess.PIPE,
-                stdout=subprocess.DEVNULL, stderr=self._ffmpeg_log_fp,
+                stdout=subprocess.PIPE, stderr=self._ffmpeg_log_fp,
             )
             self._start_time = time.time()
+
+            # 读取 -progress，用 wall-clock 时间戳每个进度块 → 写入 sidecar
+            seg = os.path.basename(self._save_path)
+            self._progress_thread = threading.Thread(
+                target=self._progress_reader, args=(self._process, seg),
+                daemon=True, name=f'progress-{self.live_id}')
+            self._progress_thread.start()
             return True
         except FileNotFoundError:
             logger.error("[录制] 未找到 ffmpeg，请安装 FFmpeg")
@@ -240,6 +262,37 @@ class DouyinRecorder:
             logger.error(f"[录制] 启动 ffmpeg 失败: {e}")
             self._process = None
         return False
+
+    def _progress_reader(self, proc, segment_file):
+        """读取 ffmpeg -progress，把每个进度块用 wall-clock 打时间戳写入 sidecar。
+
+        使用 out_time（已复用的视频输出位置）而非 wall-elapsed：重连断流期间
+        out_time 冻结、wall-clock 前进，缓冲追帧时 out_time 跳变——正好如实记录
+        gap/overlap，使映射对所有重连（含单文件内重连）保持准确。
+        """
+        out_us = None
+        try:
+            for raw in iter(proc.stdout.readline, b''):
+                line = raw.decode('utf-8', 'replace').strip()
+                if line.startswith('out_time_us='):
+                    v = line.split('=', 1)[1]
+                    out_us = int(v) if v.lstrip('-').isdigit() else None
+                elif line.startswith('out_time_ms=') and out_us is None:
+                    v = line.split('=', 1)[1]
+                    out_us = int(v) * 1000 if v.isdigit() else None
+                elif line.startswith('progress='):          # 一个进度块结束
+                    if out_us is not None and out_us >= 0 and self._timing_fp:
+                        now = time.time()
+                        iso = datetime.fromtimestamp(now).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                        try:
+                            self._timing_fp.write(f'{now:.3f},{iso},{segment_file},{out_us/1e6:.3f}\n')
+                        except Exception:
+                            pass
+                    out_us = None
+                    if line == 'progress=end':
+                        break
+        except Exception:
+            pass
 
     def stop(self):
         """停止录制并等待退出。"""
@@ -279,6 +332,18 @@ class DouyinRecorder:
             logger.info(f"[录制] 目录: {self._session_dir}")
 
         self._process = None
+
+        # 关闭时间轴 sidecar（进程已退出，reader 线程会读到 EOF 结束）
+        if self._progress_thread and self._progress_thread is not threading.current_thread():
+            self._progress_thread.join(timeout=5)
+        if self._timing_fp:
+            try:
+                self._timing_fp.flush()
+                self._timing_fp.close()
+            except Exception:
+                pass
+            self._timing_fp = None
+
         self._record_url = ''
         self._record_cfg = {}
         self._recording_active = False
