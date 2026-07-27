@@ -12,6 +12,10 @@ Usage:
 
   # extract the video frame for a wall-clock moment (needs ffmpeg):
   python align.py frame <session_dir> "2026-07-26 18:45:03" [out.jpg]
+
+  # per-room health: segments, break durations, in_gap/outside counts
+  # (point at one session dir, or a parent like data/ for every room)
+  python align.py summary <session_dir | data/>
 """
 import csv, os, sys, glob, subprocess
 from datetime import datetime
@@ -147,6 +151,86 @@ def cmd_frame(session_dir, when, out='frame.jpg'):
         sys.exit("frame extraction failed")
 
 
+def _fmt_dur(s):
+    s = int(s)
+    return f"{s//60}m{s%60:02d}s"
+
+
+def summarize_session(session_dir):
+    """Return per-session health, or None if no timing sidecar."""
+    rows = []
+    for f in glob.glob(os.path.join(session_dir, 'timing_*.csv')):
+        for r in csv.DictReader(open(f, encoding='utf-8')):
+            rows.append((float(r['wall_epoch']), r['wall_iso'],
+                         r['segment_file'], float(r['video_pts_s'])))
+    if not rows:
+        return None
+    rows.sort()
+    start = rows[0][0]
+
+    # group into segments (by segment_file), keep wall order
+    order, byseg = [], {}
+    for we, wi, sf, pts in rows:
+        if sf not in byseg:
+            byseg[sf] = []; order.append(sf)
+        byseg[sf].append((we, wi, pts))
+    seg = [(sf, byseg[sf][0][0], byseg[sf][0][1], byseg[sf][-1][0],
+            byseg[sf][0][2], byseg[sf][-1][2]) for sf in order]
+    seg.sort(key=lambda s: s[1])
+
+    breaks = []  # (dur_s, wall_iso, offset_s, kind)
+    for a, b in zip(seg, seg[1:]):          # inter-segment breaks
+        breaks.append((b[1] - a[3], b[2], a[3] - start, 'segment'))
+    for sf in order:                        # intra-file freezes
+        rs = byseg[sf]
+        for x, y in zip(rs, rs[1:]):
+            stall = (y[0] - x[0]) - (y[2] - x[2])
+            if stall >= 2.0:
+                breaks.append((stall, x[1], x[0] - start, 'freeze'))
+
+    video = sum(s[5] - s[4] for s in seg)   # summed per-segment content duration
+    wall = rows[-1][0] - start
+
+    aligned = {}
+    for f in sorted(glob.glob(os.path.join(session_dir, '*_aligned.csv'))):
+        kind = os.path.basename(f)[:-len('_aligned.csv')]
+        tot = gap = out = 0
+        for r in csv.DictReader(open(f, encoding='utf-8-sig')):
+            tot += 1
+            v = r.get('in_gap', '')
+            if v == 'True': gap += 1
+            elif v == 'outside': out += 1
+        aligned[kind] = (tot, gap, out)
+    return {'segs': seg, 'breaks': breaks, 'video': video, 'wall': wall, 'aligned': aligned}
+
+
+def cmd_summary(path):
+    # a single session dir, or a parent tree containing many
+    if glob.glob(os.path.join(path, 'timing_*.csv')):
+        sessions = [path]
+    else:
+        sessions = sorted({os.path.dirname(f)
+                           for f in glob.glob(os.path.join(path, '**', 'timing_*.csv'),
+                                              recursive=True)})
+    if not sessions:
+        sys.exit(f"no timing_*.csv found under {path}")
+    for sd in sessions:
+        s = summarize_session(sd)
+        if not s:
+            continue
+        label = os.path.join(os.path.basename(os.path.dirname(sd)), os.path.basename(sd))
+        print(f"\n{label}")
+        print(f"  segments: {len(s['segs'])}   video {_fmt_dur(s['video'])} / wall {_fmt_dur(s['wall'])}")
+        if s['breaks']:
+            for dur, iso, off, kind in sorted(s['breaks'], key=lambda b: -b[0]):
+                print(f"  break: {dur:.1f}s @ {_fmt_dur(off)} in ({iso}, {kind})")
+        else:
+            print("  break: none")
+        if s['aligned']:
+            parts = [f"{k} {t}(gap{g},out{o})" for k, (t, g, o) in s['aligned'].items()]
+            print("  aligned: " + "  ".join(parts))
+
+
 if __name__ == '__main__':
     if len(sys.argv) < 3:
         print(__doc__); sys.exit(1)
@@ -157,5 +241,7 @@ if __name__ == '__main__':
         cmd_at(sess, sys.argv[3])
     elif action == 'frame':
         cmd_frame(sess, sys.argv[3], sys.argv[4] if len(sys.argv) > 4 else 'frame.jpg')
+    elif action == 'summary':
+        cmd_summary(sess)
     else:
         print(__doc__); sys.exit(1)

@@ -156,6 +156,8 @@ scripts/record.sh --minutes 10 --room <id>      # 10-min single room
 # align (also runs automatically at session end)
 python align.py tag data/<anchor>/<session> chat
 python align.py frame data/<anchor>/<session> "<YYYY-MM-DD HH:MM:SS>" out.jpg
+# per-room health: segments, break durations, in_gap/outside counts (one session or all of data/)
+python align.py summary data/
 # diagnose the network
 python scripts/probe_net.py <room_id>
 ```
