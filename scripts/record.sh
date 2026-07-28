@@ -28,6 +28,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$REPO_DIR"
 
+# single-instance lock: refuse to start if another record.sh is already active (prevents the
+# overlapping-recording / orphan-ffmpeg mess when cron + a manual run collide). Auto-released on exit.
+exec 9>"${TMPDIR:-/tmp}/douyinbarrage_record.lock"
+if ! flock -n 9; then
+  echo "record.sh: another instance is already running (lock held) — refusing to start" >&2
+  exit 1
+fi
+
 MINUTES=0; AT=""; ROOM=""; NET="direct"; RECORD=1; LOGLEVEL="INFO"
 EXTRA=()
 while [ $# -gt 0 ]; do
@@ -97,9 +105,13 @@ echo "START $(date '+%F %T')  net=$NET record=$RECORD minutes=$MINUTES  -> $LOG"
 echo "  ${CMD[*]}"
 
 if [ "$MINUTES" -gt 0 ]; then
-  # SIGINT for graceful stop (flush CSV/SQLite, close timing sidecar, ts->mp4, auto-tag);
-  # force-kill 300s later if it hangs.
-  timeout --signal=INT --kill-after=300 "$(( MINUTES * 60 ))" "${CMD[@]}" 2>&1 | tee "$LOG"
+  # timed runs defer ts->mp4 + alignment out of the stop path (postrun/pack handle them),
+  # so graceful stop is just flush + close ffmpeg -> exits in seconds, not minutes.
+  export DOUYIN_DEFER_ALIGN=1
+  # SIGINT for graceful stop (flush CSV/SQLite, close timing sidecar).
+  # With parallel per-room shutdown + fast ffmpeg escalation, graceful exit takes seconds;
+  # --kill-after=120 is a pure safety backstop (was 300 when shutdown was serial/slow).
+  timeout --signal=INT --kill-after=120 "$(( MINUTES * 60 ))" "${CMD[@]}" 2>&1 | tee "$LOG"
 else
   "${CMD[@]}" 2>&1 | tee "$LOG"
 fi

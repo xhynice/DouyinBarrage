@@ -304,25 +304,29 @@ class DouyinRecorder:
 
         if was_recording:
             logger.info(f"[录制] {self.display_name} 正在停止...")
-            # 尝试优雅停止 ffmpeg（如果进程还活着）
+            # 停止 ffmpeg：快速升级 q(5s) -> SIGTERM(2s) -> SIGKILL。
+            # 重连中的 ffmpeg 会忽略 stdin 的 'q'，旧版 wait(30s) 会让每路最长卡 30s；
+            # 快速升级把单路停止上界压到 ~7s，配合上层并行停止避免超时被 SIGKILL 残留孤儿。
             if self._process and self._process.poll() is None:
                 try:
                     if self._process.stdin:
                         self._process.stdin.write(b'q\n')
                         self._process.stdin.close()
                 except Exception:
-                    try:
-                        self._process.terminate()
-                    except Exception:
-                        pass
-
+                    pass
                 try:
-                    self._process.wait(timeout=30)
+                    self._process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
-                    logger.warning(f"[录制] ffmpeg 未响应，强制终止")
                     try:
-                        self._process.kill()
-                        self._process.wait(timeout=3)
+                        self._process.terminate()          # SIGTERM
+                        self._process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        logger.warning(f"[录制] ffmpeg 未响应，强制终止")
+                        try:
+                            self._process.kill()           # SIGKILL
+                            self._process.wait(timeout=3)
+                        except Exception:
+                            pass
                     except Exception:
                         pass
 

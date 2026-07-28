@@ -355,8 +355,10 @@ class DouyinBarrage:
         if self._data_recorder:
             self._data_recorder.close()
         self._stop_recording()
-        # 会话结束：自动把弹幕/点赞/关注/统计对齐到视频时间轴（record 关闭时无 timing 文件，自动跳过）
-        if session_dir:
+        # 会话结束：自动把弹幕/点赞/关注/统计对齐到视频时间轴（record 关闭时无 timing 文件，自动跳过）。
+        # 定时优雅停止（DOUYIN_DEFER_ALIGN=1）时跳过：对齐是纯 Python/CPU，几十路并行仍被 GIL 串行化，
+        # 会把停止时间拖到分钟级；改由 postrun 在录制进程退出后统一对齐，停止路径只做刷盘+关流。
+        if session_dir and os.environ.get('DOUYIN_DEFER_ALIGN') != '1':
             try:
                 from align import tag_all
                 results = tag_all(session_dir, log=logger.info)

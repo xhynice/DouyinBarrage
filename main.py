@@ -609,12 +609,24 @@ def main_multi(room_list, log_level, live_stop, record=None):
     watcher.stop()
     with _active_rooms_lock:
         entries = list(_active_rooms.values())
-    for entry in entries:
+    # 并行停止所有房间。串行时 N 路 ×（ffmpeg 最长等待 + 转码 + 对齐）会轻易超过
+    # record.sh 的 --kill-after 预算，触发 SIGKILL 并残留孤儿 ffmpeg。并行后
+    # 总时长≈最慢的一路；join 超时兜底，避免个别房间卡死拖住整体退出。
+    def _safe_stop(e):
         try:
-            entry['instance'].stop()
+            e['instance'].stop()
         except Exception:
             pass
-    time.sleep(2)
+    stop_threads = [threading.Thread(target=_safe_stop, args=(e,), daemon=True,
+                                     name=f"stop-{e.get('live_id', '?')}")
+                    for e in entries]
+    for t in stop_threads:
+        t.start()
+    for t in stop_threads:
+        t.join(timeout=90)
+    still = [t.name for t in stop_threads if t.is_alive()]
+    if still:
+        print(f"[主控] 警告: {len(still)} 路未在 90s 内完成停止: {', '.join(still)}")
     print("[主控] 所有采集已停止")
 
 

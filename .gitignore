@@ -40,3 +40,6 @@ test_*.py
 *.log
 runs/
 rooms.all.txt
+
+# fleet: local text/manifest archive (runtime, not source)
+archive/

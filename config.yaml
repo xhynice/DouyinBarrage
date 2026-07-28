@@ -3,7 +3,7 @@ output_dir: data              # 输出目录（弹幕 + 录制 + 元数据）
 log_level: INFO               # 日志级别: DEBUG / INFO / WARNING / ERROR / NONE（CLI --log-level 优先）
 
 # ==================== 直播行为 ====================
-live_stop: true               # 下播后退出: true=退出 / false=等待重开播
+live_stop: false              # 下播后退出: true=退出 / false=等待重开播（监控固定窗口用 false：短暂掉线/重开播可恢复，定时 record.sh 到点统一停止）
 live_check_interval: 160      # 未开播时 HTTP 轮询间隔（秒）
 
 # ==================== 消息类型开关 ====================
@@ -36,7 +36,7 @@ record:
   quality: 标清               # 画质: 原画 / 蓝光 / 超清 / 高清 / 标清（与抖音官方名一致）
   segment_time: 0             # 分段时长（秒）: 0=不分段，建议 3600（1小时）
   segment_size: 0             # 分段大小（MB）: 0=不限制，建议 2048（2GB）
-  auto_convert: true          # 录制结束后自动 ts→mp4 转码（需 ffmpeg）
+  auto_convert: false         # 录制结束后自动 ts→mp4 转码（关闭：留给 postrun/pack 处理 .ts，避免阻塞定时优雅停止）
 
 # ==================== HTTP API ====================
 api:
