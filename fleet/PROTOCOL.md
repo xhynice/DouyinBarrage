@@ -22,17 +22,31 @@ Everything after 20:00 is automatic (cron). Your job is **setup once**, then **c
 
 ## 1. Prerequisites
 
-**Hardware (this workstation):**
-- Linux (Ubuntu 22.04+ or similar), ≥8 CPU cores, ≥16 GB RAM.
-- **Disk:** ≥150 GB free on the drive holding the project. (标清/SD ≈ 30–40 GB per night; nightly
-  upload+purge keeps it flat. If a night's upload fails, it retains — so headroom matters.)
-- **Internet:** stable, ≥50 Mbps up preferred (a full night ≈ 30–40 GB to upload; ModelScope
-  throttles, so it can take 1–2 h — that's fine, it runs overnight).
+**The workstation must have:**
+- **Linux** (Ubuntu 22.04+ or similar).
+- **≥150 GB free disk** on the drive holding the project. An SD (标清) night is ≈30–40 GB; nightly
+  upload+purge keeps it flat, but peak usage is ~2× a night (raw video + upload cache) *before*
+  purge, and a night whose upload fails is retained — so keep real headroom.
+- **Download bandwidth — during recording (hard, real-time).** Must sustain the *sum* of all live
+  streams simultaneously: SD (标清) ≈ 1 Mbps/room → **~40 Mbps down for 40 rooms** (原画 ≈ 5–6×).
+  Live streams cannot be buffered or caught up — if the pull falls behind, frames are **permanently
+  dropped**. Use a **direct** connection (no throttling proxy/VPN); `record.sh` defaults to direct
+  for this reason. Give headroom above the raw sum.
+- **Upload bandwidth — after the window.** ≥50 Mbps up recommended. The night (~30–40 GB) uploads
+  overnight; ModelScope throttles, so it can take 1–3 h — fine as long as the machine stays on. A
+  slow upload only delays; nothing is lost.
+- **Always-on** — auto **sleep / suspend / hibernate / shutdown disabled**. If the machine sleeps
+  mid-recording or mid-upload, that night is lost or left unverified. Easiest thing to get wrong.
+- **SSH access** — to operate and monitor the machine remotely.
 
-**Accounts / secrets (get these from the PI before you start):**
-- A **ModelScope access token** with **write** access to the dataset repo `SISU_DynCogLab/douyin`.
-- A **Douyin cookie** string (optional but recommended — gives complete gift/data; without it you
-  collect as a guest with slightly limited fields).
+**Software** (installed once, §2.1): Python 3, ffmpeg, Node 20+, git, git-lfs. Installing via `apt`
+needs admin/**sudo once**; after setup the nightly run needs **no elevated privileges**. (No sudo?
+They can go in user space — `nvm` for Node, a static ffmpeg binary, the Python venv.)
+
+**Accounts / secrets (get from the PI before starting):**
+- A **ModelScope access token** with **write** access to the dataset `SISU_DynCogLab/douyin`.
+- A **Douyin cookie** (recommended — complete gift/data; without it you collect as guest with a few
+  limited fields).
 - The **room list** (`rooms.txt`) if not already committed.
 
 ---
@@ -56,6 +70,12 @@ ffmpeg -version   # must exist
 cd ~                      # or wherever you keep projects
 git clone git@github.com:wangruosi/DouyinBarrage.git
 cd DouyinBarrage
+git checkout feat/timeline-sidecar   # REQUIRED: the fleet code lives on this branch, not the default
+```
+Verify you're on the right branch and the fleet layer is present:
+```bash
+git branch --show-current            # -> feat/timeline-sidecar
+ls fleet/                            # -> nightly.sh postrun.sh pack.py upload.sh station.env PROTOCOL.md
 ```
 
 ### 2.3 Python environment
@@ -146,17 +166,29 @@ If not, see §6 Troubleshooting and tell the PI before proceeding.
 
 ---
 
-## 4. Schedule it (turns on the nightly automation)
+## 4. Run each night (manual, current mode)
+
+Automatic scheduling (cron) is **not** used yet. For now you launch `nightly.sh` yourself each
+evening. It reads `START_AT`/`MINUTES` from `station.env`, waits until the window, records, then
+runs the full pipeline (convert → align → pack → upload → verify → purge → status).
+
+Launch it **detached** (keeps running if you close the terminal), any time before `START_AT`:
 ```bash
 cd ~/DouyinBarrage
-fleet/install_cron.sh          # installs one cron entry that fires 2 min before START_AT
-fleet/install_cron.sh --show   # confirm it's installed
+source .venv/bin/activate                              # so python/node/ffmpeg are on PATH
+nohup fleet/nightly.sh > runs/nightly_$(date +%Y%m%d).out 2>&1 &
+echo "launched pid $!"
 ```
-That's it — from now on the workstation records and uploads every night on its own.
-Leave the machine **powered on and awake** (disable sleep/suspend). Do not log-out-kill background
-processes.
+It will wait until `START_AT`, record for `MINUTES`, then upload+purge on its own. Watch progress:
+```bash
+tail -f logs/nightly-$(date +%Y%m%d).log              # Ctrl-C to stop watching (does NOT stop the run)
+```
+Leave the machine **powered on and awake** (disable sleep/suspend) until the upload finishes.
 
-To change the schedule later: edit `START_AT`/`MINUTES` in `station.env`, re-run `install_cron.sh`.
+To change the window: edit `START_AT`/`MINUTES` in `station.env` before launching.
+
+> When you later move to unattended cron scheduling, that's a separate step to add back — it is not
+> part of this manual workflow.
 
 ---
 
@@ -256,10 +288,14 @@ by hand unless the PI confirms that night is already safely on ModelScope.
 ```bash
 # setup (once)
 git clone git@github.com:wangruosi/DouyinBarrage.git && cd DouyinBarrage
+git checkout feat/timeline-sidecar
 python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
 # ... cookie.txt, rooms.txt, clone dataset -> REPO, edit fleet/station.env ...
 scripts/record.sh --minutes 3 && fleet/postrun.sh     # acceptance test
-fleet/install_cron.sh                                  # schedule nightly
+
+# run a night (manual; launch before START_AT)
+source .venv/bin/activate
+nohup fleet/nightly.sh > runs/nightly_$(date +%Y%m%d).out 2>&1 &
 
 # each morning
 pgrep -x ffmpeg | wc -l                                # 0 = idle
