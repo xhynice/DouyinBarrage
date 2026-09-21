@@ -1,3 +1,5 @@
+
+
 # DouyinBarrage
 
 > 抖音直播间弹幕实时采集器 — WebSocket 长连接，13 种消息类型，CSV / SQLite 双格式，集成直播录制。
@@ -90,7 +92,7 @@ data/{主播名}/
 
 | 现象 | 解决 |
 |------|------|
-| DEVICE_BLOCKED | X-Bogus 签名问题，检查 Node.js ≥ 16，`--log-level DEBUG` |
+| DEVICE_BLOCKED | X-Bogus 签名问题，检查 Node.js ≥ 20，`--log-level DEBUG` |
 | 有连接无弹幕 | 业务看门狗 60s 后自动重连，无需手动干预 |
 | 完全无数据 | TCP 静默断开，ping_timeout + 看门狗自动处理 |
 | 无效房间卡住 | 自动检测并注释，不重试 |
