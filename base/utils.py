@@ -11,9 +11,10 @@ __all__ = [
     'load_config', 'load_cookies', 'update_room_name_in_config',
     'sanitize_dir_name', 'generate_user_unique_id', 'generate_ms_token',
     'extract_ua_version', 'fmt_fans_club', 'fmt_grade', 'rotate_ua',
-    'get_user_id', 'get_anchor_dir',
+    'get_user_id', 'get_anchor_dir', 'resolve_anchor_dir',
 ]
 
+import json
 import os
 import logging
 import random
@@ -401,9 +402,118 @@ def get_user_id(user):
 
 
 def get_anchor_dir(output_dir: str, anchor_name: str, live_id: str) -> str:
-    """获取主播输出目录路径。"""
+    """获取主播输出目录路径（纯函数，按当前昵称算）。
+
+    注意：运行时不要直接用它——主播一改名，新会话就会算出新目录，
+    数据就分裂成两个文件夹（张君雅1v4⁸⁰⁰⁸ / 张君雅1v4（休）就是这么来的）。
+    运行时请用 resolve_anchor_dir()，它以首次采集的目录为准、改名不挪窝。
+    """
     dir_name = sanitize_dir_name(anchor_name) or live_id
     return os.path.join(output_dir, dir_name)
+
+
+_anchor_map_lock = threading.Lock()
+
+
+def _anchor_map_path(output_dir: str) -> str:
+    return os.path.join(output_dir, "anchor_map.json")
+
+
+def _load_anchor_map(output_dir: str) -> dict:
+    """读 anchor_map.json；文件不存在/损坏都当成空表，绝不因此中断采集。"""
+    try:
+        with open(_anchor_map_path(output_dir), encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_anchor_map(output_dir: str, mapping: dict) -> None:
+    """原子写 anchor_map.json（tmp + replace，写坏不留半截文件）。"""
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+        tmp = _anchor_map_path(output_dir) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(mapping, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, _anchor_map_path(output_dir))
+    except Exception:
+        pass
+
+
+def resolve_anchor_dir(output_dir: str, anchor_name: str, live_id: str) -> str:
+    """已采集主播的稳定输出目录：首次采集定下来的目录名，此后改名也不变。
+
+    规则（按优先级）：
+    1. anchor_map.json 里已有该 live_id → 直接用记录的目录，只更新里面
+       的 nickname（展示用），目录名不动；
+    2. 没有记录，但已有某个子目录的 meta.json 里 live_id 就是这个主播
+       （升级前的老数据，如张君雅1v4⁸⁰⁰⁸）→ 认领那个老目录，不另建新目录；
+    3. 都没有 → 用当前昵称建目录；若该名字已被别的 live_id 占用，
+       后缀 _<live_id> 区分，避免两个主播写进同一个文件夹。
+    live_id 是 rooms.txt 里的配置 id（主播数字 id），改名不会变，是比
+    昵称可靠得多的键。昵称只用来做“首次”目录名和展示，不再当主键。
+    """
+    live_id = str(live_id or "")
+    current = sanitize_dir_name(anchor_name or "") or live_id
+    now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    with _anchor_map_lock:
+        mapping = _load_anchor_map(output_dir)
+        entry = mapping.get(live_id) if live_id else None
+        if entry and entry.get("folder"):
+            folder = entry["folder"]
+            if entry.get("nickname") != anchor_name:
+                entry["nickname"] = anchor_name
+                entry["updated"] = now
+                _save_anchor_map(output_dir, mapping)
+            return os.path.join(output_dir, folder)
+
+        # 升级认领：扫描已有子目录的 meta.json，找 live_id 相同的老目录。
+        adopted = None
+        if live_id and os.path.isdir(output_dir):
+            try:
+                for name in os.listdir(output_dir):
+                    sub = os.path.join(output_dir, name)
+                    if not os.path.isdir(sub):
+                        continue
+                    meta_path = os.path.join(sub, "meta.json")
+                    if not os.path.isfile(meta_path):
+                        continue
+                    try:
+                        with open(meta_path, encoding="utf-8") as f:
+                            meta = json.load(f)
+                    except Exception:
+                        continue
+                    if str(meta.get("live_id", "")) == live_id:
+                        adopted = name
+                        break
+            except OSError:
+                pass
+        if adopted:
+            folder = adopted
+        else:
+            folder = current
+            # 当前名已被别的 live_id 占用时后缀区分（不写进别人的目录）。
+            candidate = os.path.join(output_dir, folder)
+            if os.path.isdir(candidate):
+                meta_path = os.path.join(candidate, "meta.json")
+                owner = None
+                try:
+                    with open(meta_path, encoding="utf-8") as f:
+                        owner = str(json.load(f).get("live_id", ""))
+                except Exception:
+                    owner = None
+                if owner and owner != live_id:
+                    folder = f"{current}_{live_id}"
+        if live_id:
+            mapping[live_id] = {
+                "folder": folder,
+                "nickname": anchor_name,
+                "first_seen": now,
+                "updated": now,
+            }
+            _save_anchor_map(output_dir, mapping)
+        return os.path.join(output_dir, folder)
 
 
 # ── 默认配置 ──────────────────────────────────────

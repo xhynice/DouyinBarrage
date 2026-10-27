@@ -19,7 +19,7 @@ import time
 from collections import deque
 from datetime import datetime
 
-from base.utils import SCRIPT_DIR, sanitize_dir_name, get_anchor_dir
+from base.utils import SCRIPT_DIR, sanitize_dir_name, resolve_anchor_dir
 class RoomLogFilter(logging.Filter):
     """根据当前线程名自动添加 [主播名] 前缀。
 
@@ -395,7 +395,8 @@ class DataRecorder:
         now = datetime.now()
         self._ts = now.strftime('%Y%m%d_%H%M')
 
-        self._live_dir = get_anchor_dir(self._base_dir, self._anchor_name, self.live_id)
+        # 稳定目录：首次采集定名后改名不挪窝（见 resolve_anchor_dir）。
+        self._live_dir = resolve_anchor_dir(self._base_dir, self._anchor_name, self.live_id)
         self._dir = os.path.join(self._live_dir, self._ts)
         os.makedirs(self._dir, exist_ok=True)
 

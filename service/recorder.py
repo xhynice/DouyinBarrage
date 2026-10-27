@@ -19,7 +19,7 @@ import threading
 import time
 from datetime import datetime
 
-from base.utils import sanitize_dir_name, get_anchor_dir
+from base.utils import sanitize_dir_name, resolve_anchor_dir
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ class DouyinRecorder:
         if not self._session_dir:
             ts = now.strftime('%Y%m%d_%H%M')
             self._session_dir = os.path.join(
-                get_anchor_dir(self._output_dir, self.anchor_name, self.live_id), ts)
+                resolve_anchor_dir(self._output_dir, self.anchor_name, self.live_id), ts)
             os.makedirs(self._session_dir, exist_ok=True)
 
         dir_name = sanitize_dir_name(self.anchor_name) or self.live_id
